@@ -1,5 +1,4 @@
 /* eslint-disable no-console */
-import '../../components/style';
 import 'docsearch.js/dist/cdn/docsearch.css';
 import './index.less';
 import 'nprogress/nprogress.css';
@@ -11,7 +10,6 @@ import Antd from 'ant-design-vue';
 import demoBox from './components/DemoBox.vue';
 import demoContainer from './components/demoContainer.vue';
 import demoSort from './components/demoSort.jsx';
-import store from './store/index.js';
 import clipboard from './directives/clipboard';
 import App from './App.vue';
 console.log('vue version: ', vueVersion);
@@ -50,10 +48,20 @@ router.afterEach((to, from) => {
   }
 });
 
-app.use(store);
 app.use(router);
 app.use(i18n);
 
 app.config.globalProperties.$i18n = i18n;
 
 app.mount('#app');
+
+// setTimeout(() => {
+//   const clicked = localStorage.getItem('surveybyantdv_22_03_14');
+//   if (!clicked) {
+//     const btn = document.getElementsByClassName('surveybyantdv-launch-button')?.[0];
+//     if (btn) {
+//       btn.click();
+//       localStorage.setItem('surveybyantdv_22_03_14', true);
+//     }
+//   }
+// }, 3000);

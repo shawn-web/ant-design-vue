@@ -149,8 +149,8 @@ export interface TableProps<RecordType = DefaultRecordType> {
   transformCellText?: TransformCellText<RecordType>;
 }
 
-export default defineComponent<TableProps<DefaultRecordType>>({
-  name: 'Table',
+export default defineComponent({
+  name: 'VcTable',
   inheritAttrs: false,
   props: [
     'prefixCls',
@@ -191,8 +191,7 @@ export default defineComponent<TableProps<DefaultRecordType>>({
     'canExpandable',
     'onUpdateInternalRefs',
     'transformCellText',
-  ] as any,
-  slots: ['title', 'footer', 'summary', 'emptyText'],
+  ],
   emits: ['expand', 'expandedRowsChange', 'updateInternalRefs', 'update:expandedRowKeys'],
   setup(props, { attrs, slots, emit }) {
     const mergedData = computed(() => props.data || EMPTY_DATA);
@@ -272,7 +271,7 @@ export default defineComponent<TableProps<DefaultRecordType>>({
     // defalutXxxx 仅仅第一次生效
     stop();
 
-    const mergedExpandedKeys = computed(
+    const mergedExpandedKeys = computed<Set<Key>>(
       () => new Set(props.expandedRowKeys || innerExpandedKeys.value || []),
     );
 
@@ -283,9 +282,9 @@ export default defineComponent<TableProps<DefaultRecordType>>({
       const hasKey = mergedExpandedKeys.value.has(key);
       if (hasKey) {
         mergedExpandedKeys.value.delete(key);
-        newExpandedKeys = [...mergedExpandedKeys.value];
+        newExpandedKeys = [...(mergedExpandedKeys.value as any)];
       } else {
-        newExpandedKeys = [...mergedExpandedKeys.value, key];
+        newExpandedKeys = [...(mergedExpandedKeys.value as any), key];
       }
       innerExpandedKeys.value = newExpandedKeys;
 

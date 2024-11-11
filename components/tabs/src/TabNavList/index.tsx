@@ -16,9 +16,10 @@ import OperationNode from './OperationNode';
 import { useInjectTabs } from '../TabContext';
 import useTouchMove from '../hooks/useTouchMove';
 import AddButton from './AddButton';
-import type { Key } from '../../../_util/type';
+import { objectType, functionType } from '../../../_util/type';
+import type { CustomSlotsType, Key } from '../../../_util/type';
 import type { ExtractPropTypes, PropType, CSSProperties } from 'vue';
-import { onBeforeUnmount, defineComponent, ref, watch, watchEffect, computed } from 'vue';
+import { shallowRef, onBeforeUnmount, defineComponent, watch, watchEffect, computed } from 'vue';
 import PropTypes from '../../../_util/vue-types';
 import useSyncState from '../hooks/useSyncState';
 import useState from '../../../_util/hooks/useState';
@@ -36,14 +37,18 @@ export const tabNavListProps = () => {
     tabPosition: { type: String as PropType<TabPosition> },
     activeKey: { type: [String, Number] },
     rtl: { type: Boolean },
-    animated: { type: Object as PropType<AnimatedConfig>, default: undefined as AnimatedConfig },
-    editable: { type: Object as PropType<EditableConfig> },
+    animated: objectType<AnimatedConfig>(),
+    editable: objectType<EditableConfig>(),
     moreIcon: PropTypes.any,
     moreTransitionName: { type: String },
     mobile: { type: Boolean },
     tabBarGutter: { type: Number },
     renderTabBar: { type: Function as PropType<RenderTabBar> },
-    locale: { type: Object as PropType<TabsLocale>, default: undefined as TabsLocale },
+    locale: objectType<TabsLocale>(),
+    popupClassName: String,
+    getPopupContainer: functionType<
+      ((triggerNode?: HTMLElement | undefined) => HTMLElement) | undefined
+    >(),
     onTabClick: {
       type: Function as PropType<(activeKey: Key, e: MouseEvent | KeyboardEvent) => void>,
     },
@@ -59,19 +64,53 @@ interface ExtraContentProps {
   extra?: (info?: { position: 'left' | 'right' }) => TabBarExtraContent;
 }
 
+const getTabSize = (tab: HTMLElement, containerRect: { x: number; y: number }) => {
+  // tabListRef
+  const { offsetWidth, offsetHeight, offsetTop, offsetLeft } = tab;
+  const { width, height, x, y } = tab.getBoundingClientRect();
+
+  // Use getBoundingClientRect to avoid decimal inaccuracy
+  if (Math.abs(width - offsetWidth) < 1) {
+    return [width, height, x - containerRect.x, y - containerRect.y];
+  }
+
+  return [offsetWidth, offsetHeight, offsetLeft, offsetTop];
+};
+
+// const getSize = (refObj: ShallowRef<HTMLElement>) => {
+//   const { offsetWidth = 0, offsetHeight = 0 } = refObj.value || {};
+
+//   // Use getBoundingClientRect to avoid decimal inaccuracy
+//   if (refObj.value) {
+//     const { width, height } = refObj.value.getBoundingClientRect();
+
+//     if (Math.abs(width - offsetWidth) < 1) {
+//       return [width, height];
+//     }
+//   }
+
+//   return [offsetWidth, offsetHeight];
+// };
+
 export default defineComponent({
   compatConfig: { MODE: 3 },
   name: 'TabNavList',
   inheritAttrs: false,
   props: tabNavListProps(),
-  slots: ['moreIcon', 'leftExtra', 'rightExtra', 'tabBarExtraContent'],
+  slots: Object as CustomSlotsType<{
+    moreIcon?: any;
+    leftExtra?: any;
+    rightExtra?: any;
+    tabBarExtraContent?: any;
+    default?: any;
+  }>,
   emits: ['tabClick', 'tabScroll'],
   setup(props, { attrs, slots }) {
     const { tabs, prefixCls } = useInjectTabs();
-    const tabsWrapperRef = ref<HTMLDivElement>();
-    const tabListRef = ref<HTMLDivElement>();
-    const operationsRef = ref<{ $el: HTMLDivElement }>();
-    const innerAddButtonRef = ref();
+    const tabsWrapperRef = shallowRef<HTMLDivElement>();
+    const tabListRef = shallowRef<HTMLDivElement>();
+    const operationsRef = shallowRef<{ $el: HTMLDivElement }>();
+    const innerAddButtonRef = shallowRef();
     const [setRef, btnRefs] = useRefs();
     const tabPositionTopOrBottom = computed(
       () => props.tabPosition === 'top' || props.tabPosition === 'bottom',
@@ -100,8 +139,8 @@ export default defineComponent({
     // ========================== Util =========================
     const operationsHiddenClassName = computed(() => `${prefixCls.value}-nav-operations-hidden`);
 
-    const transformMin = ref(0);
-    const transformMax = ref(0);
+    const transformMin = shallowRef(0);
+    const transformMax = shallowRef(0);
 
     watchEffect(() => {
       if (!tabPositionTopOrBottom.value) {
@@ -127,7 +166,7 @@ export default defineComponent({
     };
 
     // ========================= Mobile ========================
-    const touchMovingRef = ref<any>();
+    const touchMovingRef = shallowRef<any>();
     const [lockAnimation, setLockAnimation] = useState<number>();
 
     const doLockAnimation = () => {
@@ -221,8 +260,8 @@ export default defineComponent({
       }
     };
 
-    const visibleStart = ref(0);
-    const visibleEnd = ref(0);
+    const visibleStart = shallowRef(0);
+    const visibleEnd = shallowRef(0);
 
     watchEffect(() => {
       let unit: 'width' | 'height';
@@ -277,7 +316,29 @@ export default defineComponent({
 
       return ([visibleStart.value, visibleEnd.value] = [startIndex, endIndex]);
     });
+    const updateTabSizes = () => {
+      setTabSizes(() => {
+        const newSizes: TabSizeMap = new Map();
+        const listRect = tabListRef.value?.getBoundingClientRect();
+        tabs.value.forEach(({ key }) => {
+          const btnRef = btnRefs.value.get(key);
+          const btnNode = (btnRef as any)?.$el || btnRef;
+          if (btnNode) {
+            const [width, height, left, top] = getTabSize(btnNode, listRect);
+            newSizes.set(key, { width, height, left, top });
+          }
+        });
+        return newSizes;
+      });
+    };
 
+    watch(
+      () => tabs.value.map(tab => tab.key).join('%%'),
+      () => {
+        updateTabSizes();
+      },
+      { flush: 'post' },
+    );
     const onListHolderResize = () => {
       // Update wrapper records
       const offsetWidth = tabsWrapperRef.value?.offsetWidth || 0;
@@ -297,22 +358,7 @@ export default defineComponent({
       setWrapperScrollHeight(newWrapperScrollHeight);
 
       // Update buttons records
-      setTabSizes(() => {
-        const newSizes: TabSizeMap = new Map();
-        tabs.value.forEach(({ key }) => {
-          const btnRef = btnRefs.value.get(key);
-          const btnNode = (btnRef as any)?.$el || btnRef;
-          if (btnNode) {
-            newSizes.set(key, {
-              width: btnNode.offsetWidth,
-              height: btnNode.offsetHeight,
-              left: btnNode.offsetLeft,
-              top: btnNode.offsetTop,
-            });
-          }
-        });
-        return newSizes;
-      });
+      updateTabSizes();
     };
 
     // ======================== Dropdown =======================
@@ -327,7 +373,7 @@ export default defineComponent({
     const activeTabOffset = computed(() => tabOffsets.value.get(props.activeKey));
 
     // Delay set ink style to avoid remove tab blink
-    const inkBarRafRef = ref<number>();
+    const inkBarRafRef = shallowRef<number>();
     const cleanInkBarRaf = () => {
       raf.cancel(inkBarRafRef.value);
     };

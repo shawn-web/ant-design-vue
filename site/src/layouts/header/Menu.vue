@@ -12,6 +12,7 @@
       :default-value="antdVersion"
     >
       <a-select-option :value="antdVersion">{{ antdVersion }}</a-select-option>
+      <a-select-option value="3.x" @click="changeVersion('3x')">3.x</a-select-option>
       <a-select-option value="2.x" @click="changeVersion('2x')">
         2.x (Not Recommended)
       </a-select-option>
@@ -36,7 +37,7 @@ import More from './More.vue';
 import Navigation from './Navigation.vue';
 import Ecosystem from './Ecosystem.vue';
 import { version } from 'ant-design-vue';
-import { isZhCN, isLocalStorageNameSupported, getLocalizedPathname } from '../../utils/util';
+import { isZhCN, getLocalizedPathname } from '../../utils/util';
 import { useRoute } from 'vue-router';
 export default defineComponent({
   name: 'HeaderMenu',
@@ -55,11 +56,9 @@ export default defineComponent({
         location: { pathname },
       } = window;
       const currentProtocol = `${window.location.protocol}//`;
-      const currentHref = window.location.href.substr(currentProtocol.length);
+      const currentHref = window.location.href.substring(currentProtocol.length);
 
-      if (isLocalStorageNameSupported()) {
-        localStorage.setItem('locale', isZhCN(pathname) ? 'en-US' : 'zh-CN');
-      }
+      localStorage.setItem('locale', isZhCN(pathname) ? 'en-US' : 'zh-CN');
 
       window.location.href =
         currentProtocol +
@@ -69,7 +68,7 @@ export default defineComponent({
         );
     };
 
-    const changeVersion = v => {
+    const changeVersion = (v: string) => {
       location.href = `https://${v}.antdv.com${route.fullPath}`;
     };
     return {

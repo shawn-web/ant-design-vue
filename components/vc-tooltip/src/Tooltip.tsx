@@ -4,7 +4,8 @@ import { placements } from './placements';
 import Content from './Content';
 import { getPropsSlot } from '../../_util/props-util';
 import type { CSSProperties, PropType } from 'vue';
-import { defineComponent, ref, watchEffect } from 'vue';
+import { defineComponent, shallowRef, watchEffect } from 'vue';
+
 function noop() {}
 export default defineComponent({
   compatConfig: { MODE: 3 },
@@ -36,17 +37,20 @@ export default defineComponent({
     popupVisible: { type: Boolean, default: undefined },
     onVisibleChange: Function,
     onPopupAlign: Function,
+    arrow: { type: Boolean, default: true },
   },
-  slots: ['arrowContent', 'overlay'],
   setup(props, { slots, attrs, expose }) {
-    const triggerDOM = ref();
+    const triggerDOM = shallowRef();
 
     const getPopupElement = () => {
       const { prefixCls, tipId, overlayInnerStyle } = props;
+
       return [
-        <div class={`${prefixCls}-arrow`} key="arrow">
-          {getPropsSlot(slots, props, 'arrowContent')}
-        </div>,
+        !!props.arrow ? (
+          <div class={`${prefixCls}-arrow`} key="arrow">
+            {getPropsSlot(slots, props, 'arrowContent')}
+          </div>
+        ) : null,
         <Content
           key="content"
           prefixCls={prefixCls}
@@ -67,8 +71,8 @@ export default defineComponent({
       forcePopupAlign: () => triggerDOM.value?.forcePopupAlign(),
     });
 
-    const destroyTooltip = ref(false);
-    const autoDestroy = ref(false);
+    const destroyTooltip = shallowRef(false);
+    const autoDestroy = shallowRef(false);
     watchEffect(() => {
       const { destroyTooltipOnHide } = props;
       if (typeof destroyTooltipOnHide === 'boolean') {
@@ -123,6 +127,7 @@ export default defineComponent({
         onPopupVisibleChange: props.onVisibleChange || (noop as any),
         onPopupAlign: props.onPopupAlign || noop,
         ref: triggerDOM,
+        arrow: !!props.arrow,
         popup: getPopupElement(),
       };
       return <Trigger {...triggerProps} v-slots={{ default: slots.default }}></Trigger>;

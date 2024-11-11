@@ -13,6 +13,8 @@ import type {
 } from '../interface';
 import { INTERNAL_COL_DEFINE } from '../utils/legacyUtil';
 import { EXPAND_COLUMN } from '../constant';
+import { useInjectSlots } from '../../table/context';
+import { customRenderSlot } from '../../_util/vnode';
 
 function flatColumns<RecordType>(columns: ColumnsType<RecordType>): ColumnType<RecordType>[] {
   return columns.reduce((list, column) => {
@@ -106,7 +108,7 @@ function useColumns<RecordType>(
     prefixCls?: Ref<string>;
     columns?: Ref<ColumnsType<RecordType>>;
     expandable: Ref<boolean>;
-    expandedKeys: Ref<Set<Key>>;
+    expandedKeys: ComputedRef<Set<Key>>;
     getRowKey: Ref<GetRowKey<RecordType>>;
     onTriggerExpand: TriggerEventHandler<RecordType>;
     expandIcon?: Ref<RenderExpandIcon<RecordType>>;
@@ -119,6 +121,7 @@ function useColumns<RecordType>(
   },
   transformColumns: Ref<(columns: ColumnsType<RecordType>) => ColumnsType<RecordType>>,
 ): [ComputedRef<ColumnsType<RecordType>>, ComputedRef<readonly ColumnType<RecordType>[]>] {
+  const contextSlots = useInjectSlots();
   // Add expand column
   const withExpandColumns = computed<ColumnsType<RecordType>>(() => {
     if (expandable.value) {
@@ -177,7 +180,7 @@ function useColumns<RecordType>(
           class: `${prefixCls.value}-expand-icon-col`,
           columnType: 'EXPAND_COLUMN',
         },
-        title: '',
+        title: customRenderSlot(contextSlots.value, 'expandColumnTitle', {}, () => ['']),
         fixed: fixedColumn,
         class: `${prefixCls.value}-row-expand-icon-cell`,
         width: expandColumnWidth.value,

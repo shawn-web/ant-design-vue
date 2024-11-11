@@ -186,7 +186,6 @@ function PickerPanel<DateType>() {
       const panelContext = useInjectPanel();
       const {
         operationRef,
-        panelRef: panelDivRef,
         onSelect: onContextSelect,
         hideRanges,
         defaultOpenValue,
@@ -601,7 +600,6 @@ function PickerPanel<DateType>() {
             onKeydown={onInternalKeydown}
             onBlur={onInternalBlur}
             onMousedown={onMousedown}
-            ref={panelDivRef}
           >
             {panelNode}
             {extraFooter || rangesNode || todayNode ? (
@@ -618,5 +616,5 @@ function PickerPanel<DateType>() {
   });
 }
 const InterPickerPanel = PickerPanel<any>();
-export default <DateType,>(props: MergedPickerPanelProps<DateType>): JSX.Element =>
+export default <DateType,>(props: MergedPickerPanelProps<DateType>) =>
   createVNode(InterPickerPanel, props);

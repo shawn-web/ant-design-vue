@@ -3,18 +3,21 @@ import ScrollNumber from './ScrollNumber';
 import classNames from '../_util/classNames';
 import { getPropsSlot, flattenChildren } from '../_util/props-util';
 import { cloneElement } from '../_util/vnode';
-import { getTransitionProps, Transition } from '../_util/transition';
+import { getTransitionProps } from '../_util/transition';
 import type { ExtractPropTypes, CSSProperties, PropType } from 'vue';
-import { defineComponent, computed, ref, watch } from 'vue';
+import { defineComponent, computed, ref, watch, Transition } from 'vue';
 import Ribbon from './Ribbon';
-import { isPresetColor } from './utils';
-import useConfigInject from '../_util/hooks/useConfigInject';
+import useConfigInject from '../config-provider/hooks/useConfigInject';
 import isNumeric from '../_util/isNumeric';
+import useStyle from './style';
+import type { PresetColorKey } from '../theme/interface';
+import type { LiteralUnion, CustomSlotsType } from '../_util/type';
 import type { PresetStatusColorType } from '../_util/colors';
+import { isPresetColor } from '../_util/colors';
 
 export const badgeProps = () => ({
   /** Number to show in badge */
-  count: PropTypes.any,
+  count: PropTypes.any.def(null),
   showZero: { type: Boolean, default: undefined },
   /** Max count to show */
   overflowCount: { type: Number, default: 99 },
@@ -24,7 +27,7 @@ export const badgeProps = () => ({
   scrollNumberPrefixCls: String,
   status: { type: String as PropType<PresetStatusColorType> },
   size: { type: String as PropType<'default' | 'small'>, default: 'default' },
-  color: String,
+  color: String as PropType<LiteralUnion<PresetColorKey>>,
   text: PropTypes.any,
   offset: Array as unknown as PropType<[number | string, number | string]>,
   numberStyle: { type: Object as PropType<CSSProperties>, default: undefined as CSSProperties },
@@ -39,9 +42,14 @@ export default defineComponent({
   Ribbon,
   inheritAttrs: false,
   props: badgeProps(),
-  slots: ['text', 'count'],
+  slots: Object as CustomSlotsType<{
+    text: any;
+    count: any;
+    default: any;
+  }>,
   setup(props, { slots, attrs }) {
     const { prefixCls, direction } = useConfigInject('badge', props);
+    const [wrapSSR, hashId] = useStyle(prefixCls);
 
     // ================================ Misc ================================
     const numberedDisplayCount = computed(() => {
@@ -52,14 +60,15 @@ export default defineComponent({
       ) as string | number | null;
     });
 
-    const hasStatus = computed(
-      () =>
-        (props.status !== null && props.status !== undefined) ||
-        (props.color !== null && props.color !== undefined),
-    );
-
     const isZero = computed(
       () => numberedDisplayCount.value === '0' || numberedDisplayCount.value === 0,
+    );
+    const ignoreCount = computed(() => props.count === null || (isZero.value && !props.showZero));
+    const hasStatus = computed(
+      () =>
+        ((props.status !== null && props.status !== undefined) ||
+          (props.color !== null && props.color !== undefined)) &&
+        ignoreCount.value,
     );
 
     const showAsDot = computed(() => props.dot && !isZero.value);
@@ -92,17 +101,18 @@ export default defineComponent({
       },
       { immediate: true },
     );
-
+    // InternalColor
+    const isInternalColor = computed(() => isPresetColor(props.color, false));
     // Shared styles
     const statusCls = computed(() => ({
       [`${prefixCls.value}-status-dot`]: hasStatus.value,
       [`${prefixCls.value}-status-${props.status}`]: !!props.status,
-      [`${prefixCls.value}-status-${props.color}`]: isPresetColor(props.color),
+      [`${prefixCls.value}-color-${props.color}`]: isInternalColor.value,
     }));
 
     const statusStyle = computed(() => {
-      if (props.color && !isPresetColor(props.color)) {
-        return { background: props.color };
+      if (props.color && !isInternalColor.value) {
+        return { background: props.color, color: props.color };
       } else {
         return {};
       }
@@ -115,7 +125,7 @@ export default defineComponent({
       [`${prefixCls.value}-multiple-words`]:
         !isDotRef.value && displayCount.value && displayCount.value.toString().length > 1,
       [`${prefixCls.value}-status-${props.status}`]: !!props.status,
-      [`${prefixCls.value}-status-${props.color}`]: isPresetColor(props.color),
+      [`${prefixCls.value}-color-${props.color}`]: isInternalColor.value,
     }));
 
     return () => {
@@ -179,18 +189,19 @@ export default defineComponent({
           [`${pre}-rtl`]: direction.value === 'rtl',
         },
         attrs.class,
+        hashId.value,
       );
 
       // <Badge status="success" />
       if (!children && hasStatus.value) {
         const statusTextColor = mergedStyle.color;
-        return (
+        return wrapSSR(
           <span {...attrs} class={badgeClassName} style={mergedStyle}>
             <span class={statusCls.value} style={statusStyle.value} />
             <span style={{ color: statusTextColor }} class={`${pre}-status-text`}>
               {text}
             </span>
-          </span>
+          </span>,
         );
       }
 
@@ -198,12 +209,12 @@ export default defineComponent({
         appear: false,
       });
       let scrollNumberStyle: CSSProperties = { ...mergedStyle, ...(props.numberStyle as object) };
-      if (color && !isPresetColor(color)) {
+      if (color && !isInternalColor.value) {
         scrollNumberStyle = scrollNumberStyle || {};
         scrollNumberStyle.background = color;
       }
 
-      return (
+      return wrapSSR(
         <span {...attrs} class={badgeClassName}>
           {children}
           <Transition {...transitionProps}>
@@ -221,7 +232,7 @@ export default defineComponent({
             </ScrollNumber>
           </Transition>
           {statusTextNode}
-        </span>
+        </span>,
       );
     };
   },

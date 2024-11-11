@@ -2,7 +2,8 @@ import Menu, { MenuItem } from '../../../menu';
 import Dropdown from '../../../vc-dropdown';
 import type { Tab, TabsLocale, EditableConfig } from '../interface';
 import AddButton from './AddButton';
-import type { Key } from '../../../_util/type';
+import type { CustomSlotsType, Key } from '../../../_util/type';
+import { functionType } from '../../../_util/type';
 import KeyCode from '../../../_util/KeyCode';
 import type { CSSProperties, ExtractPropTypes, PropType } from 'vue';
 import classNames from '../../../_util/classNames';
@@ -10,6 +11,7 @@ import { defineComponent, watch, computed, onMounted } from 'vue';
 import PropTypes from '../../../_util/vue-types';
 import useState from '../../../_util/hooks/useState';
 import EllipsisOutlined from '@ant-design/icons-vue/EllipsisOutlined';
+import { useProvideOverride } from '../../../menu/src/OverrideContext';
 
 export const operationNodeProps = {
   prefixCls: { type: String },
@@ -25,6 +27,10 @@ export const operationNodeProps = {
   locale: { type: Object as PropType<TabsLocale>, default: undefined as TabsLocale },
   removeAriaLabel: String,
   onTabClick: { type: Function as PropType<(key: Key, e: MouseEvent | KeyboardEvent) => void> },
+  popupClassName: String,
+  getPopupContainer: functionType<
+    ((triggerNode?: HTMLElement | undefined) => HTMLElement) | undefined
+  >(),
 };
 
 export type OperationNodeProps = Partial<ExtractPropTypes<typeof operationNodeProps>>;
@@ -35,7 +41,10 @@ export default defineComponent({
   inheritAttrs: false,
   props: operationNodeProps,
   emits: ['tabClick'],
-  slots: ['moreIcon'],
+  slots: Object as CustomSlotsType<{
+    moreIcon?: any;
+    default?: any;
+  }>,
   setup(props, { attrs, slots }) {
     // ======================== Dropdown ========================
     const [open, setOpen] = useState(false);
@@ -117,7 +126,7 @@ export default defineComponent({
         setSelectedKey(null);
       }
     });
-
+    useProvideOverride({});
     return () => {
       const {
         prefixCls,
@@ -131,7 +140,9 @@ export default defineComponent({
         tabBarGutter,
         rtl,
         onTabClick,
+        popupClassName,
       } = props;
+      if (!tabs.length) return null;
       const dropdownPrefix = `${prefixCls}-dropdown`;
 
       const dropdownAriaLabel = locale?.dropdownAriaLabel;
@@ -147,6 +158,7 @@ export default defineComponent({
 
       const overlayClassName = classNames({
         [`${dropdownPrefix}-rtl`]: rtl,
+        [`${popupClassName}`]: true,
       });
       const moreNode = mobile ? null : (
         <Dropdown
@@ -158,6 +170,7 @@ export default defineComponent({
           overlayClassName={overlayClassName}
           mouseEnterDelay={0.1}
           mouseLeaveDelay={0.1}
+          getPopupContainer={props.getPopupContainer}
           v-slots={{
             overlay: () => (
               <Menu

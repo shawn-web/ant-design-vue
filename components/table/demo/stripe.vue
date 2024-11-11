@@ -32,9 +32,7 @@ Use `rowClassName` Customize the table with Striped.
   />
 </template>
 
-<script lang="ts">
-import { defineComponent } from 'vue';
-
+<script lang="ts" setup>
 const columns = [
   { title: 'Name', dataIndex: 'name' },
   { title: 'Age', dataIndex: 'age' },
@@ -66,19 +64,13 @@ const data = [
     address: 'Sidney No. 1 Lake Park',
   },
 ];
-
-export default defineComponent({
-  setup() {
-    return {
-      data,
-      columns,
-    };
-  },
-});
 </script>
 
 <style scoped>
-.ant-table-striped :deep(.table-striped) td {
+[data-doc-theme='light'] .ant-table-striped :deep(.table-striped) td {
   background-color: #fafafa;
+}
+[data-doc-theme='dark'] .ant-table-striped :deep(.table-striped) td {
+  background-color: rgb(29, 29, 29);
 }
 </style>

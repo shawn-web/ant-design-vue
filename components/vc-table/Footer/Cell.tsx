@@ -12,9 +12,9 @@ export interface SummaryCellProps {
   align?: AlignType;
 }
 
-export default defineComponent<SummaryCellProps>({
-  name: 'SummaryCell',
-  props: ['index', 'colSpan', 'rowSpan', 'align'] as any,
+export default defineComponent({
+  name: 'ATableSummaryCell',
+  props: ['index', 'colSpan', 'rowSpan', 'align'],
   setup(props, { attrs, slots }) {
     const tableContext = useInjectTable();
     const summaryContext = useInjectSummary();

@@ -1,26 +1,32 @@
 <template>
   <Header />
+  <div v-if="headers.length" class="toc-affix" :style="y > 102 ? 'position:fixed; top: 16px;' : ''">
+    <a-anchor style="width: 160px" :items="headers">
+      <template #customTitle="item">
+        <LinkOutlined v-if="item.target" />
+        {{ item.title }}
+      </template>
+    </a-anchor>
+  </div>
   <div class="main-wrapper">
     <a-row>
       <template v-if="isMobile">
         <a-drawer
           key="mobile-menu"
+          v-model:open="visible"
           :closable="false"
           placement="left"
           class="drawer drawer-left"
-          :visible="visible"
           wrapper-class-name="drawer-wrapper"
           width="60%"
         >
           <surelyVueVue />
           <Menu :menus="dataSource" :active-menu-item="activeMenuItem" :is-zh-c-n="isZhCN" />
-          <template #handle>
-            <div class="drawer-handle" @click="handleClickShowButton">
-              <close-outlined v-if="visible" :style="iconStyle" />
-              <MenuOutlined v-else :style="iconStyle" />
-            </div>
-          </template>
         </a-drawer>
+        <div class="drawer-handle" @click="handleClickShowButton">
+          <close-outlined v-if="visible" :style="iconStyle" />
+          <MenuOutlined v-else :style="iconStyle" />
+        </div>
       </template>
       <template v-else>
         <a-col :xxxl="4" :xxl="4" :xl="5" :lg="6" :md="6" :sm="24" :xs="24" class="main-menu">
@@ -43,24 +49,43 @@
             <component :is="matchCom" />
           </Demo>
           <router-view v-else />
-          <a-affix v-if="headers.length" class="toc-affix" :offset-top="20">
-            <a-anchor>
-              <a-anchor-link
-                v-for="h in headers"
-                :key="h.title"
-                :href="h.href || `#${slugifyTitle(h.title)}`"
-                :target="h.target"
-              >
-                <template #title>
-                  <LinkOutlined v-if="h.target" />
-                  {{ isZhCN ? h.title : h.enTitle || h.title }}
-                </template>
-              </a-anchor-link>
-            </a-anchor>
-          </a-affix>
         </section>
-        <a-back-top />
-        <div class="fixed-widgets" :style="isZhCN ? { bottom: '175px' } : {}">
+        <a-float-button-group trigger="click">
+          <template #icon>
+            <ThemeIcon />
+          </template>
+          <a-float-button
+            :tooltip="$t('app.floatButton.theme-editor')"
+            @click="$router.push(isZhCN ? '/theme-editor-cn' : '/theme-editor')"
+          >
+            <template #icon>
+              <ThemeEditorIcon />
+            </template>
+          </a-float-button>
+          <a-float-button
+            :tooltip="$t('app.floatButton.dark-theme')"
+            :type="themeMode.theme.value === 'dark' ? 'primary' : 'default'"
+            @click="themeMode.changeTheme(themeMode.theme.value === 'dark' ? 'light' : 'dark')"
+          >
+            <template #icon>
+              <DarkIcon />
+            </template>
+          </a-float-button>
+          <a-float-button
+            :tooltip="$t('app.floatButton.compact-theme')"
+            :type="themeMode.compactTheme.value === 'compact' ? 'primary' : 'default'"
+            @click="
+              themeMode.changeCompactTheme(
+                themeMode.compactTheme.value === 'compact' ? '' : 'compact',
+              )
+            "
+          >
+            <template #icon>
+              <CompactIcon />
+            </template>
+          </a-float-button>
+        </a-float-button-group>
+        <!-- <div class="fixed-widgets" :style="isZhCN ? { bottom: '175px' } : {}">
           <a-dropdown placement="top">
             <template #overlay>
               <a-menu
@@ -75,7 +100,7 @@
               <template #icon><ThemeIcon /></template>
             </a-avatar>
           </a-dropdown>
-        </div>
+        </div> -->
         <PrevAndNext :menus="menus" :current-menu-index="currentMenuIndex" :is-zh-c-n="isZhCN" />
         <Footer />
       </a-col>
@@ -97,9 +122,13 @@ import TopAd from '../components/rice/top_rice.vue';
 import Sponsors from '../components/rice/sponsors.vue';
 import RightBottomAd from '../components/rice/right_bottom_rice.vue';
 import { CloseOutlined, MenuOutlined, LinkOutlined } from '@ant-design/icons-vue';
-import ThemeIcon from './ThemeIcon.vue';
+import ThemeIcon from './icons/ThemeIcon.vue';
+import ThemeEditorIcon from './icons/ThemeEditorIcon';
+import DarkIcon from './icons/Dark';
+import CompactIcon from './icons/Compact';
 import surelyVueVue from '../components/surelyVue.vue';
 import WWAdsVue from '../components/rice/WWAds.vue';
+import { useWindowScroll } from '@vueuse/core';
 
 const rControl = /[\u0000-\u001f]/g;
 const rSpecial = /[\s~`!@#$%^&*()\-_+=[\]{}|\\;:"'<>,.?/]+/g;
@@ -118,11 +147,15 @@ export default defineComponent({
     CloseOutlined,
     MenuOutlined,
     ThemeIcon,
+    ThemeEditorIcon,
+    DarkIcon,
+    CompactIcon,
     surelyVueVue,
     WWAdsVue,
     LinkOutlined,
   },
   setup() {
+    const { y } = useWindowScroll();
     const visible = ref(false);
     const route = useRoute();
     const globalConfig = inject<GlobalConfig>(GLOBAL_CONFIG);
@@ -137,9 +170,12 @@ export default defineComponent({
     });
 
     const themeMode = inject('themeMode', {
-      theme: ref('default'),
+      theme: ref('light'),
+      compactTheme: ref('light'),
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       changeTheme: (_key: any) => void 0,
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      changeCompactTheme: (_key: any) => void 0,
     });
 
     watch(
@@ -166,6 +202,21 @@ export default defineComponent({
         ? matchCom.value[isZhCN.value ? 'CN' : 'US']?.pageData
         : (matchCom.value as any)?.pageData,
     );
+    const slugifyTitle = (str: string) => {
+      return (
+        str
+          // Remove control characters
+          .replace(rControl, '')
+          // Replace special characters
+          .replace(rSpecial, '-')
+          // Remove continuos separators
+          .replace(/\-{2,}/g, '-')
+          // Remove prefixing and trailing separtors
+          .replace(/^\-+|\-+$/g, '')
+          // ensure it doesn't start with a number (#121)
+          .replace(/^(\d)/, '_$1')
+      );
+    };
     const headers = computed(() => {
       let tempHeaders = (pageData.value?.headers || []).filter((h: Header) => h.level === 2);
       if (isDemo.value) {
@@ -200,10 +251,15 @@ export default defineComponent({
             ],
           );
         }
-        tempHeaders.push({ title: 'API', href: '#API' });
+        tempHeaders.push({ title: 'API', href: '#api' });
       }
 
-      return tempHeaders;
+      return tempHeaders.map(header => ({
+        ...header,
+        key: header.title,
+        title: isZhCN.value ? header.title : header.enTitle || header.title,
+        href: (header.href || `#${slugifyTitle(header.title)}`).toLocaleLowerCase(),
+      }));
     });
 
     const mainContainerClass = computed(() => {
@@ -216,21 +272,6 @@ export default defineComponent({
       visible.value = !visible.value;
     };
     return {
-      slugifyTitle: (str: string) => {
-        return (
-          str
-            // Remove control characters
-            .replace(rControl, '')
-            // Replace special characters
-            .replace(rSpecial, '-')
-            // Remove continuos separators
-            .replace(/\-{2,}/g, '-')
-            // Remove prefixing and trailing separtors
-            .replace(/^\-+|\-+$/g, '')
-            // ensure it doesn't start with a number (#121)
-            .replace(/^(\d)/, '_$1')
-        );
-      },
       themeMode,
       visible,
       isMobile: globalConfig.isMobile,
@@ -249,36 +290,26 @@ export default defineComponent({
         // color: '#fff',
         fontSize: '20px',
       },
+      y,
     };
   },
 });
 </script>
 <style lang="less" scoped>
+.toc-affix {
+  background-color: rgba(0, 0, 0, 0);
+  backdrop-filter: blur(10px);
+}
+
 .toc-affix :deep(.ant-anchor) {
   font-size: 12px;
   max-width: 110px;
-  .ant-anchor-link {
-    border-left: 2px solid #f0f0f0;
-    padding: 4px 0 4px 16px;
-  }
 
-  .ant-anchor-link-active {
-    border-left: 2px solid #1890ff;
-  }
   .ant-anchor-ink::before {
     display: none;
   }
   .ant-anchor-ink-ball {
     display: none;
-  }
-}
-
-[data-theme='dark'] .toc-affix :deep(.ant-anchor) {
-  .ant-anchor-link {
-    border-left: 2px solid #303030;
-  }
-  .ant-anchor-link-active {
-    border-left: 2px solid #177ddc;
   }
 }
 </style>

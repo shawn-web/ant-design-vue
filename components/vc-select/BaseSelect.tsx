@@ -19,16 +19,16 @@ import type { ScrollConfig, ScrollTo } from '../vc-virtual-list/List';
 import {
   computed,
   defineComponent,
-  getCurrentInstance,
   onBeforeUnmount,
   onMounted,
   provide,
-  ref,
+  shallowRef,
   toRefs,
   watch,
   watchEffect,
+  ref,
 } from 'vue';
-import type { CSSProperties, ExtractPropTypes, PropType, VNode } from 'vue';
+import type { CSSProperties, ExtractPropTypes, PropType } from 'vue';
 import PropTypes from '../_util/vue-types';
 import { initDefaultProps, isValidElement } from '../_util/props-util';
 import isMobile from '../vc-util/isMobile';
@@ -269,17 +269,18 @@ export default defineComponent({
         ? props.showSearch
         : multiple.value || props.mode === 'combobox',
     );
-    const mobile = ref(false);
+    const mobile = shallowRef(false);
     onMounted(() => {
       mobile.value = isMobile();
     });
     const legacyTreeSelectContext = useInjectLegacySelectContext();
     // ============================== Refs ==============================
-    const containerRef = ref<HTMLDivElement>(null);
+    const containerRef = shallowRef<HTMLDivElement>(null);
     const selectorDomRef = createRef();
-    const triggerRef = ref<RefTriggerProps>(null);
-    const selectorRef = ref<RefSelectorProps>(null);
-    const listRef = ref<RefOptionListProps>(null);
+    const triggerRef = shallowRef<RefTriggerProps>(null);
+    const selectorRef = shallowRef<RefSelectorProps>(null);
+    const listRef = shallowRef<RefOptionListProps>(null);
+    const blurRef = ref<boolean>(false);
 
     /** Used for component focused management */
     const [mockFocused, setMockFocused, cancelSetMockFocused] = useDelayReset();
@@ -308,8 +309,8 @@ export default defineComponent({
 
     // ============================== Open ==============================
     const initOpen = props.open !== undefined ? props.open : props.defaultOpen;
-    const innerOpen = ref(initOpen);
-    const mergedOpen = ref(initOpen);
+    const innerOpen = shallowRef(initOpen);
+    const mergedOpen = shallowRef(initOpen);
     const setInnerOpen = (val: boolean) => {
       innerOpen.value = props.open !== undefined ? props.open : val;
       mergedOpen.value = innerOpen.value;
@@ -339,10 +340,16 @@ export default defineComponent({
     const onToggleOpen = (newOpen?: boolean) => {
       const nextOpen = newOpen !== undefined ? newOpen : !mergedOpen.value;
 
-      if (innerOpen.value !== nextOpen && !props.disabled) {
+      if (mergedOpen.value !== nextOpen && !props.disabled) {
         setInnerOpen(nextOpen);
-        if (props.onDropdownVisibleChange) {
-          props.onDropdownVisibleChange(nextOpen);
+        props.onDropdownVisibleChange && props.onDropdownVisibleChange(nextOpen);
+
+        if (!nextOpen && popupFocused.value) {
+          popupFocused.value = false;
+          setMockFocused(false, () => {
+            focusRef.value = false;
+            blurRef.value = false;
+          });
         }
       }
     };
@@ -412,6 +419,9 @@ export default defineComponent({
       () => {
         if (innerOpen.value && !!props.disabled) {
           setInnerOpen(false);
+        }
+        if (props.disabled && !blurRef.value) {
+          setMockFocused(false);
         }
       },
       { immediate: true },
@@ -504,8 +514,7 @@ export default defineComponent({
 
     // ========================== Focus / Blur ==========================
     /** Record real focus status */
-    const focusRef = ref(false);
-
+    const focusRef = shallowRef(false);
     const onContainerFocus: FocusEventHandler = (...args) => {
       setMockFocused(true);
 
@@ -522,10 +531,15 @@ export default defineComponent({
 
       focusRef.value = true;
     };
-
+    const popupFocused = ref(false);
     const onContainerBlur: FocusEventHandler = (...args) => {
+      if (popupFocused.value) {
+        return;
+      }
+      blurRef.value = true;
       setMockFocused(false, () => {
         focusRef.value = false;
+        blurRef.value = false;
         onToggleOpen(false);
       });
 
@@ -548,6 +562,12 @@ export default defineComponent({
       if (props.onBlur) {
         props.onBlur(...args);
       }
+    };
+    const onPopupFocusin = () => {
+      popupFocused.value = true;
+    };
+    const onPopupFocusout = () => {
+      popupFocused.value = false;
     };
     provide('VCSelectContainerEvent', {
       focus: onContainerFocus,
@@ -592,11 +612,11 @@ export default defineComponent({
     };
 
     // ============================= Dropdown ==============================
-    const containerWidth = ref<number>(null);
-    const instance = getCurrentInstance();
+    const containerWidth = shallowRef<number>(null);
+    // const instance = getCurrentInstance();
     const onPopupMouseEnter = () => {
       // We need force update here since popup dom is render async
-      instance.update();
+      // instance.update();
     };
     onMounted(() => {
       watch(
@@ -700,7 +720,7 @@ export default defineComponent({
         typeof getRawInputElement === 'function' && getRawInputElement();
       const domProps = {
         ...restProps,
-      } as Omit<keyof typeof restProps, typeof DEFAULT_OMIT_PROPS[number]>;
+      } as Omit<keyof typeof restProps, (typeof DEFAULT_OMIT_PROPS)[number]>;
 
       // Used for raw custom input trigger
       let onTriggerVisibleChange: null | ((newOpen: boolean) => void);
@@ -721,7 +741,7 @@ export default defineComponent({
       // ============================= Arrow ==============================
       const mergedShowArrow =
         showArrow !== undefined ? showArrow : loading || (!multiple.value && mode !== 'combobox');
-      let arrowNode: VNode | JSX.Element;
+      let arrowNode: VueNode;
 
       if (mergedShowArrow) {
         arrowNode = (
@@ -742,7 +762,7 @@ export default defineComponent({
       }
 
       // ============================= Clear ==============================
-      let clearNode: VNode | JSX.Element;
+      let clearNode: VueNode;
       const onClearMouseDown: MouseEventHandler = () => {
         onClear?.();
 
@@ -810,6 +830,8 @@ export default defineComponent({
           getTriggerDOMNode={() => selectorDomRef.current}
           onPopupVisibleChange={onTriggerVisibleChange}
           onPopupMouseEnter={onPopupMouseEnter}
+          onPopupFocusin={onPopupFocusin}
+          onPopupFocusout={onPopupFocusout}
           v-slots={{
             default: () => {
               return customizeRawInputElement ? (
@@ -851,7 +873,7 @@ export default defineComponent({
         ></SelectTrigger>
       );
       // >>> Render
-      let renderNode: VNode | JSX.Element;
+      let renderNode: VueNode;
 
       // Render raw
       if (customizeRawInputElement) {
@@ -873,7 +895,7 @@ export default defineComponent({
                 style={{
                   width: 0,
                   height: 0,
-                  display: 'flex',
+                  position: 'absolute',
                   overflow: 'hidden',
                   opacity: 0,
                 }}

@@ -7,15 +7,21 @@ import type {
   HTMLAttributes,
 } from 'vue';
 import {
+  onMounted,
+  reactive,
   watch,
   defineComponent,
   computed,
   nextTick,
-  ref,
+  shallowRef,
   watchEffect,
   onBeforeUnmount,
   toRaw,
 } from 'vue';
+import LoadingOutlined from '@ant-design/icons-vue/LoadingOutlined';
+import CloseCircleFilled from '@ant-design/icons-vue/CloseCircleFilled';
+import CheckCircleFilled from '@ant-design/icons-vue/CheckCircleFilled';
+import ExclamationCircleFilled from '@ant-design/icons-vue/ExclamationCircleFilled';
 import cloneDeep from 'lodash-es/cloneDeep';
 import PropTypes from '../_util/vue-types';
 import Row from '../grid/Row';
@@ -26,18 +32,28 @@ import { getNamePath } from './utils/valueUtil';
 import { toArray } from './utils/typeUtil';
 import { warning } from '../vc-util/warning';
 import find from 'lodash-es/find';
+import type { CustomSlotsType } from '../_util/type';
 import { tuple } from '../_util/type';
-import type { InternalNamePath, Rule, RuleError, RuleObject, ValidateOptions } from './interface';
-import useConfigInject from '../_util/hooks/useConfigInject';
+import type {
+  FormLabelAlign,
+  InternalNamePath,
+  Rule,
+  RuleError,
+  RuleObject,
+  ValidateOptions,
+} from './interface';
+import useConfigInject from '../config-provider/hooks/useConfigInject';
 import { useInjectForm } from './context';
 import FormItemLabel from './FormItemLabel';
 import FormItemInput from './FormItemInput';
-import type { ValidationRule } from './Form';
-import { useProvideFormItemContext } from './FormItemContext';
+import type { FormItemStatusContextProps } from './FormItemContext';
+import { FormItemInputContext, useProvideFormItemContext } from './FormItemContext';
 import useDebounce from './utils/useDebounce';
+import classNames from '../_util/classNames';
+import useStyle from './style';
 
 const ValidateStatuses = tuple('success', 'warning', 'error', 'validating', '');
-export type ValidateStatus = typeof ValidateStatuses[number];
+export type ValidateStatus = (typeof ValidateStatuses)[number];
 
 export interface FieldExpose {
   fieldValue: Ref<any>;
@@ -46,9 +62,16 @@ export interface FieldExpose {
   resetField: () => void;
   clearValidate: () => void;
   namePath: ComputedRef<InternalNamePath>;
-  rules?: ComputedRef<ValidationRule[]>;
+  rules?: ComputedRef<Rule[]>;
   validateRules: (options: ValidateOptions) => Promise<void> | Promise<RuleError[]>;
 }
+
+const iconMap: { [key: string]: any } = {
+  success: CheckCircleFilled,
+  warning: ExclamationCircleFilled,
+  error: CloseCircleFilled,
+  validating: LoadingOutlined,
+};
 
 function getPropByPath(obj: any, namePathList: any, strict?: boolean) {
   let tempObj = obj;
@@ -91,7 +114,7 @@ export const formItemProps = () => ({
   wrapperCol: { type: Object as PropType<ColProps & HTMLAttributes> },
   hasFeedback: { type: Boolean, default: false },
   colon: { type: Boolean, default: undefined },
-  labelAlign: PropTypes.oneOf(tuple('left', 'right')),
+  labelAlign: String as PropType<FormLabelAlign>,
   prop: { type: [String, Number, Array] as PropType<string | number | Array<string | number>> },
   name: { type: [String, Number, Array] as PropType<string | number | Array<string | number>> },
   rules: [Array, Object] as PropType<Rule[] | Rule>,
@@ -103,6 +126,7 @@ export const formItemProps = () => ({
   messageVariables: { type: Object as PropType<Record<string, string>> },
   hidden: Boolean,
   noStyle: Boolean,
+  tooltip: String,
 });
 
 export type FormItemProps = Partial<ExtractPropTypes<ReturnType<typeof formItemProps>>>;
@@ -127,20 +151,29 @@ export default defineComponent({
   inheritAttrs: false,
   __ANT_NEW_FORM_ITEM: true,
   props: formItemProps(),
-  slots: ['help', 'label', 'extra'],
+  slots: Object as CustomSlotsType<{
+    help: any;
+    label: any;
+    extra: any;
+    default: any;
+    tooltip: any;
+  }>,
   setup(props, { slots, attrs, expose }) {
     warning(props.prop === undefined, `\`prop\` is deprecated. Please use \`name\` instead.`);
     const eventKey = `form-item-${++indexGuid}`;
     const { prefixCls } = useConfigInject('form', props);
+    const [wrapSSR, hashId] = useStyle(prefixCls);
+    const itemRef = shallowRef<HTMLDivElement>();
     const formContext = useInjectForm();
     const fieldName = computed(() => props.name || props.prop);
-    const errors = ref([]);
-    const validateDisabled = ref(false);
-    const inputRef = ref();
+    const errors = shallowRef([]);
+    const validateDisabled = shallowRef(false);
+    const inputRef = shallowRef();
     const namePath = computed(() => {
       const val = fieldName.value;
       return getNamePath(val);
     });
+
     const fieldId = computed(() => {
       if (!namePath.value.length) {
         return undefined;
@@ -160,7 +193,7 @@ export default defineComponent({
     };
     const fieldValue = computed(() => getNewFieldValue());
 
-    const initialValue = ref(cloneDeep(fieldValue.value));
+    const initialValue = shallowRef(cloneDeep(fieldValue.value));
     const mergedValidateTrigger = computed(() => {
       let validateTrigger =
         props.validateTrigger !== undefined
@@ -169,7 +202,7 @@ export default defineComponent({
       validateTrigger = validateTrigger === undefined ? 'change' : validateTrigger;
       return toArray(validateTrigger);
     });
-    const rulesRef = computed<ValidationRule[]>(() => {
+    const rulesRef = computed<Rule[]>(() => {
       let formRules = formContext.rules.value;
       const selfRules = props.rules;
       const requiredRule =
@@ -200,7 +233,7 @@ export default defineComponent({
       return isRequired || props.required;
     });
 
-    const validateState = ref();
+    const validateState = shallowRef();
     watchEffect(() => {
       validateState.value = props.validateStatus;
     });
@@ -209,7 +242,7 @@ export default defineComponent({
       if (typeof props.label === 'string') {
         variables.label = props.label;
       } else if (props.name) {
-        variables.label = String(name);
+        variables.label = String(props.name);
       }
       if (props.messageVariables) {
         variables = { ...variables, ...props.messageVariables };
@@ -296,7 +329,7 @@ export default defineComponent({
       const value = fieldValue.value;
       const prop = getPropByPath(model, namePath.value, true);
       if (Array.isArray(value)) {
-        prop.o[prop.k] = [].concat(initialValue.value);
+        prop.o[prop.k] = [].concat(initialValue.value ?? []);
       } else {
         prop.o[prop.k] = initialValue.value;
       }
@@ -383,7 +416,7 @@ export default defineComponent({
     });
     const itemClassName = computed(() => ({
       [`${prefixCls.value}-item`]: true,
-
+      [hashId.value]: true,
       // Status
       [`${prefixCls.value}-item-has-feedback`]: mergedValidateStatus.value && props.hasFeedback,
       [`${prefixCls.value}-item-has-success`]: mergedValidateStatus.value === 'success',
@@ -392,51 +425,119 @@ export default defineComponent({
       [`${prefixCls.value}-item-is-validating`]: mergedValidateStatus.value === 'validating',
       [`${prefixCls.value}-item-hidden`]: props.hidden,
     }));
+    const formItemInputContext = reactive<FormItemStatusContextProps>({});
+    FormItemInputContext.useProvide(formItemInputContext);
+    watchEffect(() => {
+      let feedbackIcon: any;
+      if (props.hasFeedback) {
+        const IconNode = mergedValidateStatus.value && iconMap[mergedValidateStatus.value];
+        feedbackIcon = IconNode ? (
+          <span
+            class={classNames(
+              `${prefixCls.value}-item-feedback-icon`,
+              `${prefixCls.value}-item-feedback-icon-${mergedValidateStatus.value}`,
+            )}
+          >
+            <IconNode />
+          </span>
+        ) : null;
+      }
+      Object.assign(formItemInputContext, {
+        status: mergedValidateStatus.value,
+        hasFeedback: props.hasFeedback,
+        feedbackIcon,
+        isFormItemInput: true,
+      });
+    });
+
+    const marginBottom = shallowRef<number>(null);
+    const showMarginOffset = shallowRef(false);
+    const updateMarginBottom = () => {
+      if (itemRef.value) {
+        const itemStyle = getComputedStyle(itemRef.value);
+        marginBottom.value = parseInt(itemStyle.marginBottom, 10);
+      }
+    };
+    onMounted(() => {
+      watch(
+        showMarginOffset,
+        () => {
+          if (showMarginOffset.value) {
+            updateMarginBottom();
+          }
+        },
+        { flush: 'post', immediate: true },
+      );
+    });
+
+    const onErrorVisibleChanged = (nextVisible: boolean) => {
+      if (!nextVisible) {
+        marginBottom.value = null;
+      }
+    };
     return () => {
       if (props.noStyle) return slots.default?.();
       const help = props.help ?? (slots.help ? filterEmpty(slots.help()) : null);
-      return (
-        <Row
-          {...attrs}
+      const withHelp = !!(
+        (help !== undefined && help !== null && Array.isArray(help) && help.length) ||
+        debounceErrors.value.length
+      );
+      showMarginOffset.value = withHelp;
+      return wrapSSR(
+        <div
           class={[
             itemClassName.value,
-            (help !== undefined && help !== null) || debounceErrors.value.length
-              ? `${prefixCls.value}-item-with-help`
-              : '',
+            withHelp ? `${prefixCls.value}-item-with-help` : '',
             attrs.class,
           ]}
-          key="row"
-          v-slots={{
-            default: () => (
-              <>
-                {/* Label */}
-                <FormItemLabel
-                  {...props}
-                  htmlFor={htmlFor.value}
-                  required={isRequired.value}
-                  requiredMark={formContext.requiredMark.value}
-                  prefixCls={prefixCls.value}
-                  onClick={onLabelClick}
-                  label={props.label ?? slots.label?.()}
-                />
-                {/* Input Group */}
-                <FormItemInput
-                  {...props}
-                  errors={
-                    help !== undefined && help !== null ? toArray(help) : debounceErrors.value
-                  }
-                  prefixCls={prefixCls.value}
-                  status={mergedValidateStatus.value}
-                  ref={inputRef}
-                  help={help}
-                  extra={props.extra ?? slots.extra?.()}
-                  v-slots={{ default: slots.default }}
-                  // v-slots={{ default: () => [firstChildren, children.slice(1)] }}
-                ></FormItemInput>
-              </>
-            ),
-          }}
-        ></Row>
+          ref={itemRef}
+        >
+          <Row
+            {...attrs}
+            class={`${prefixCls.value}-item-row`}
+            key="row"
+            v-slots={{
+              default: () => (
+                <>
+                  {/* Label */}
+                  <FormItemLabel
+                    {...props}
+                    htmlFor={htmlFor.value}
+                    required={isRequired.value}
+                    requiredMark={formContext.requiredMark.value}
+                    prefixCls={prefixCls.value}
+                    onClick={onLabelClick}
+                    label={props.label}
+                    v-slots={{ label: slots.label, tooltip: slots.tooltip }}
+                  />
+                  {/* Input Group */}
+                  <FormItemInput
+                    {...props}
+                    errors={
+                      help !== undefined && help !== null ? toArray(help) : debounceErrors.value
+                    }
+                    marginBottom={marginBottom.value}
+                    prefixCls={prefixCls.value}
+                    status={mergedValidateStatus.value}
+                    ref={inputRef}
+                    help={help}
+                    extra={props.extra ?? slots.extra?.()}
+                    v-slots={{ default: slots.default }}
+                    onErrorVisibleChanged={onErrorVisibleChanged}
+                  ></FormItemInput>
+                </>
+              ),
+            }}
+          ></Row>
+          {!!marginBottom.value && (
+            <div
+              class={`${prefixCls.value}-margin-offset`}
+              style={{
+                marginBottom: `-${marginBottom.value}px`,
+              }}
+            />
+          )}
+        </div>,
       );
     };
   },

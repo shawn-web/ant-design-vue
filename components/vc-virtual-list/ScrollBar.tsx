@@ -119,18 +119,19 @@ export default defineComponent({
         this.onScrollbarTouchStart,
         supportsPassive ? ({ passive: false } as EventListenerOptions) : false,
       );
-      this.thumbRef.current.removeEventListener(
-        'touchstart',
-        this.onMouseDown,
-        supportsPassive ? ({ passive: false } as EventListenerOptions) : false,
-      );
-      this.thumbRef.current.removeEventListener(
-        'touchmove',
-        this.onMouseMove,
-        supportsPassive ? ({ passive: false } as EventListenerOptions) : false,
-      );
-      this.thumbRef.current.removeEventListener('touchend', this.onMouseUp);
-
+      if (this.thumbRef.current) {
+        this.thumbRef.current.removeEventListener(
+          'touchstart',
+          this.onMouseDown,
+          supportsPassive ? ({ passive: false } as EventListenerOptions) : false,
+        );
+        this.thumbRef.current.removeEventListener(
+          'touchmove',
+          this.onMouseMove,
+          supportsPassive ? ({ passive: false } as EventListenerOptions) : false,
+        );
+        this.thumbRef.current.removeEventListener('touchend', this.onMouseUp);
+      }
       raf.cancel(this.moveRaf);
     },
 
@@ -181,8 +182,8 @@ export default defineComponent({
 
     // ===================== Calculate =====================
     getSpinHeight() {
-      const { height, count } = this.$props;
-      let baseHeight = (height / count) * 10;
+      const { height, scrollHeight } = this.$props;
+      let baseHeight = (height / scrollHeight) * 100;
       baseHeight = Math.max(baseHeight, MIN_SIZE);
       baseHeight = Math.min(baseHeight, height / 2);
       return Math.floor(baseHeight);

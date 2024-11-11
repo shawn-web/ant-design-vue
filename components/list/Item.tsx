@@ -6,9 +6,10 @@ import { cloneElement } from '../_util/vnode';
 import type { CSSProperties, ExtractPropTypes, PropType } from 'vue';
 import { defineComponent, inject, ref } from 'vue';
 import ItemMeta from './ItemMeta';
-import useConfigInject from '../_util/hooks/useConfigInject';
+import useConfigInject from '../config-provider/hooks/useConfigInject';
 import { ListContextKey } from './contextKey';
 import type { ListGridType } from '.';
+import type { CustomSlotsType } from '../_util/type';
 
 export const listItemProps = () => ({
   prefixCls: String,
@@ -25,7 +26,11 @@ export default defineComponent({
   inheritAttrs: false,
   Meta: ItemMeta,
   props: listItemProps(),
-  slots: ['actions', 'extra'],
+  slots: Object as CustomSlotsType<{
+    actions: any;
+    extra: any;
+    default: any;
+  }>,
   setup(props, { slots, attrs }) {
     const { itemLayout, grid } = inject(ListContextKey, {
       grid: ref(),

@@ -1,4 +1,4 @@
-import type { ImgHTMLAttributes, CSSProperties, PropType } from 'vue';
+import type { CSSProperties, PropType } from 'vue';
 import { ref, watch, defineComponent, computed, onMounted, onUnmounted } from 'vue';
 import isNumber from 'lodash-es/isNumber';
 import cn from '../../_util/classNames';
@@ -32,6 +32,8 @@ export const imageProps = () => ({
   rootClassName: String,
   prefixCls: String,
   previewPrefixCls: String,
+  width: [Number, String],
+  height: [Number, String],
   previewMask: {
     type: [Boolean, Function] as PropType<false | (() => any)>,
     default: undefined,
@@ -64,7 +66,7 @@ export const mergeDefaultValue = <T extends object>(obj: T, defaultValues: objec
 let uuid = 0;
 const ImageInternal = defineComponent({
   compatConfig: { MODE: 3 },
-  name: 'Image',
+  name: 'VcImage',
   inheritAttrs: false,
   props: imageProps(),
   emits: ['click', 'error'],
@@ -81,6 +83,7 @@ const ImageInternal = defineComponent({
         ? mergeDefaultValue(props.preview, defaultValues)
         : defaultValues;
     });
+    const src = computed(() => preview.value.src ?? props.src);
     const isCustomPlaceholder = computed(
       () => (props.placeholder && props.placeholder !== true) || slots.placeholder,
     );
@@ -96,9 +99,6 @@ const ImageInternal = defineComponent({
       onChange: onPreviewVisibleChange,
     });
 
-    watch(isShowPreview, (val, preVal) => {
-      onPreviewVisibleChange(val, preVal);
-    });
     const status = ref<ImageStatus>(isCustomPlaceholder.value ? 'loading' : 'normal');
     watch(
       () => props.src,
@@ -171,14 +171,14 @@ const ImageInternal = defineComponent({
     let unRegister = () => {};
     onMounted(() => {
       watch(
-        [() => props.src, canPreview],
+        [src, canPreview],
         () => {
           unRegister();
           if (!isPreviewGroup.value) {
             return () => {};
           }
 
-          unRegister = registerImage(currentId.value, props.src, canPreview.value);
+          unRegister = registerImage(currentId.value, src.value, canPreview.value);
 
           if (!canPreview.value) {
             unRegister();
@@ -203,8 +203,6 @@ const ImageInternal = defineComponent({
         placeholder,
         wrapperStyle,
         rootClassName,
-      } = props;
-      const {
         width,
         height,
         crossorigin,
@@ -215,13 +213,13 @@ const ImageInternal = defineComponent({
         usemap,
         class: cls,
         style,
-      } = attrs as ImgHTMLAttributes;
-      const { icons, maskClassName, src: previewSrc, ...dialogProps } = preview.value;
+      } = { ...props, ...attrs } as any;
+      const { icons, maskClassName, ...dialogProps } = preview.value;
 
       const wrappperClass = cn(prefixCls, wrapperClassName, rootClassName, {
         [`${prefixCls}-error`]: isError.value,
       });
-      const mergedSrc = isError.value && fallback ? fallback : previewSrc ?? imgSrc;
+      const mergedSrc = isError.value && fallback ? fallback : src.value;
       const imgCommonProps = {
         crossorigin,
         decoding,
@@ -229,6 +227,8 @@ const ImageInternal = defineComponent({
         sizes,
         srcset,
         usemap,
+        width,
+        height,
         class: cn(
           `${prefixCls}-img`,
           {
@@ -237,7 +237,7 @@ const ImageInternal = defineComponent({
           cls,
         ),
         style: {
-          height,
+          height: toSizePx(height),
           ...(style as CSSProperties),
         },
       };

@@ -4,21 +4,26 @@ import {
   defineComponent,
   getCurrentInstance,
   nextTick,
-  ref,
+  shallowRef,
   watch,
   watchEffect,
 } from 'vue';
 import ClearableLabeledInput from './ClearableLabeledInput';
 import ResizableTextArea from './ResizableTextArea';
 import { textAreaProps } from './inputProps';
-import type { InputFocusOptions } from './Input';
-import { fixControlledValue, resolveOnChange, triggerFocus } from './Input';
+import type { InputFocusOptions } from '../vc-input/utils/commonUtils';
+import { fixControlledValue, resolveOnChange, triggerFocus } from '../vc-input/utils/commonUtils';
 import classNames from '../_util/classNames';
-import { useInjectFormItemContext } from '../form/FormItemContext';
+import { FormItemInputContext, useInjectFormItemContext } from '../form/FormItemContext';
 import type { FocusEventHandler } from '../_util/EventInterface';
-import useConfigInject from '../_util/hooks/useConfigInject';
+import useConfigInject from '../config-provider/hooks/useConfigInject';
 import omit from '../_util/omit';
 import type { VueNode } from '../_util/type';
+import { getMergedStatus, getStatusClassNames } from '../_util/statusUtils';
+
+// CSSINJS
+import useStyle from './style';
+import { useInjectDisabled } from '../config-provider/DisabledContext';
 
 function fixEmojiLength(value: string, maxLength: number) {
   return [...(value || '')].slice(0, maxLength).join('');
@@ -33,10 +38,10 @@ function setTriggerValue(
   let newTriggerValue = triggerValue;
   if (isCursorInEnd) {
     // 光标在尾部，直接截断
-    newTriggerValue = fixEmojiLength(triggerValue, maxLength!);
+    newTriggerValue = fixEmojiLength(triggerValue, maxLength);
   } else if (
     [...(preValue || '')].length < triggerValue.length &&
-    [...(triggerValue || '')].length > maxLength!
+    [...(triggerValue || '')].length > maxLength
   ) {
     // 光标在中间，如果最后的值超过最大值，则采用原先的值
     newTriggerValue = preValue;
@@ -51,23 +56,30 @@ export default defineComponent({
   props: textAreaProps(),
   setup(props, { attrs, expose, emit }) {
     const formItemContext = useInjectFormItemContext();
-    const stateValue = ref(props.value === undefined ? props.defaultValue : props.value);
-    const resizableTextArea = ref();
-    const mergedValue = ref('');
+    const formItemInputContext = FormItemInputContext.useInject();
+    const mergedStatus = computed(() => getMergedStatus(formItemInputContext.status, props.status));
+    const stateValue = shallowRef(props.value ?? props.defaultValue);
+    const resizableTextArea = shallowRef();
+    const mergedValue = shallowRef('');
     const { prefixCls, size, direction } = useConfigInject('input', props);
+
+    // Style
+    const [wrapSSR, hashId] = useStyle(prefixCls);
+    const disabled = useInjectDisabled();
+
     const showCount = computed(() => {
       return (props.showCount as any) === '' || props.showCount || false;
     });
     // Max length value
     const hasMaxLength = computed(() => Number(props.maxlength) > 0);
-    const compositing = ref(false);
+    const compositing = shallowRef(false);
 
-    const oldCompositionValueRef = ref<string>();
-    const oldSelectionStartRef = ref<number>(0);
+    const oldCompositionValueRef = shallowRef<string>();
+    const oldSelectionStartRef = shallowRef<number>(0);
     const onInternalCompositionStart = (e: CompositionEvent) => {
       compositing.value = true;
       // 拼音输入前保存一份旧值
-      oldCompositionValueRef.value = mergedValue.value as string;
+      oldCompositionValueRef.value = mergedValue.value;
       // 保存旧的光标位置
       oldSelectionStartRef.value = (e.currentTarget as any).selectionStart;
       emit('compositionstart', e);
@@ -82,7 +94,7 @@ export default defineComponent({
           oldSelectionStartRef.value === oldCompositionValueRef.value?.length;
         triggerValue = setTriggerValue(
           isCursorInEnd,
-          oldCompositionValueRef.value as string,
+          oldCompositionValueRef.value,
           triggerValue,
           props.maxlength,
         );
@@ -158,41 +170,43 @@ export default defineComponent({
     };
 
     const handleChange = (e: Event) => {
-      const { composing } = e.target as any;
       let triggerValue = (e.target as any).value;
-      compositing.value = !!((e as any).isComposing || composing);
-      if ((compositing.value && props.lazy) || stateValue.value === triggerValue) return;
+      if (stateValue.value === triggerValue) return;
 
       if (hasMaxLength.value) {
         // 1. 复制粘贴超过maxlength的情况 2.未超过maxlength的情况
         const target = e.target as any;
         const isCursorInEnd =
-          target.selectionStart >= props.maxlength! + 1 ||
+          target.selectionStart >= props.maxlength + 1 ||
           target.selectionStart === triggerValue.length ||
           !target.selectionStart;
         triggerValue = setTriggerValue(
           isCursorInEnd,
-          mergedValue.value as string,
+          mergedValue.value,
           triggerValue,
-          props.maxlength!,
+          props.maxlength,
         );
       }
       resolveOnChange(e.currentTarget as any, e, triggerChange, triggerValue);
       setValue(triggerValue);
     };
     const renderTextArea = () => {
-      const { style, class: customClass } = attrs;
+      const { class: customClass } = attrs;
       const { bordered = true } = props;
       const resizeProps = {
         ...omit(props, ['allowClear']),
         ...attrs,
-        style: showCount.value ? {} : style,
-        class: {
-          [`${prefixCls.value}-borderless`]: !bordered,
-          [`${customClass}`]: customClass && !showCount.value,
-          [`${prefixCls.value}-sm`]: size.value === 'small',
-          [`${prefixCls.value}-lg`]: size.value === 'large',
-        },
+        class: [
+          {
+            [`${prefixCls.value}-borderless`]: !bordered,
+            [`${customClass}`]: customClass && !showCount.value,
+            [`${prefixCls.value}-sm`]: size.value === 'small',
+            [`${prefixCls.value}-lg`]: size.value === 'large',
+          },
+          getStatusClassNames(prefixCls.value, mergedStatus.value),
+          hashId.value,
+        ],
+        disabled: disabled.value,
         showCount: null,
         prefixCls: prefixCls.value,
         onInput: handleChange,
@@ -208,9 +222,10 @@ export default defineComponent({
       return (
         <ResizableTextArea
           {...resizeProps}
-          id={resizeProps.id ?? formItemContext.id.value}
+          id={resizeProps?.id ?? formItemContext.id.value}
           ref={resizableTextArea}
           maxlength={props.maxlength}
+          lazy={props.lazy}
         />
       );
     };
@@ -222,7 +237,7 @@ export default defineComponent({
     });
 
     watchEffect(() => {
-      let val = fixControlledValue(stateValue.value) as string;
+      let val = fixControlledValue(stateValue.value);
       if (
         !compositing.value &&
         hasMaxLength.value &&
@@ -236,7 +251,6 @@ export default defineComponent({
     return () => {
       const { maxlength, bordered = true, hidden } = props;
       const { style, class: customClass } = attrs;
-
       const inputProps: any = {
         ...props,
         ...attrs,
@@ -246,6 +260,8 @@ export default defineComponent({
         direction: direction.value,
         bordered,
         style: showCount.value ? undefined : style,
+        hashId: hashId.value,
+        disabled: props.disabled ?? disabled.value,
       };
 
       let textareaNode = (
@@ -253,14 +269,19 @@ export default defineComponent({
           {...inputProps}
           value={mergedValue.value}
           v-slots={{ element: renderTextArea }}
+          status={props.status}
         />
       );
 
-      if (showCount.value) {
+      if (showCount.value || formItemInputContext.hasFeedback) {
         const valueLength = [...mergedValue.value].length;
         let dataCount: VueNode = '';
         if (typeof showCount.value === 'object') {
-          dataCount = showCount.value.formatter({ count: valueLength, maxlength });
+          dataCount = showCount.value.formatter({
+            value: mergedValue.value,
+            count: valueLength,
+            maxlength,
+          });
         } else {
           dataCount = `${valueLength}${hasMaxLength.value ? ` / ${maxlength}` : ''}`;
         }
@@ -271,18 +292,26 @@ export default defineComponent({
               `${prefixCls.value}-textarea`,
               {
                 [`${prefixCls.value}-textarea-rtl`]: direction.value === 'rtl',
+                [`${prefixCls.value}-textarea-show-count`]: showCount.value,
+                [`${prefixCls.value}-textarea-in-form-item`]: formItemInputContext.isFormItemInput,
               },
               `${prefixCls.value}-textarea-show-count`,
               customClass,
+              hashId.value,
             )}
             style={style as CSSProperties}
             data-count={typeof dataCount !== 'object' ? dataCount : undefined}
           >
             {textareaNode}
+            {formItemInputContext.hasFeedback && (
+              <span class={`${prefixCls.value}-textarea-suffix`}>
+                {formItemInputContext.feedbackIcon}
+              </span>
+            )}
           </div>
         );
       }
-      return textareaNode;
+      return wrapSSR(textareaNode);
     };
   },
 });
