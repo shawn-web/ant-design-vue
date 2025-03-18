@@ -13,9 +13,13 @@ import { computed, defineComponent, ref, watch } from 'vue';
 import RightOutlined from '@ant-design/icons-vue/RightOutlined';
 import firstNotUndefined from '../_util/firstNotUndefined';
 import classNames from '../_util/classNames';
-import useConfigInject from '../_util/hooks/useConfigInject';
+import useConfigInject from '../config-provider/hooks/useConfigInject';
 import type { CollapsePanelProps } from './CollapsePanel';
 import collapseMotion from '../_util/collapseMotion';
+import type { CustomSlotsType } from '../_util/type';
+
+// CSSINJS
+import useStyle from './style';
 
 type Key = number | string;
 
@@ -38,11 +42,12 @@ export default defineComponent({
     accordion: false,
     destroyInactivePanel: false,
     bordered: true,
-    openAnimation: collapseMotion('ant-motion-collapse', false),
-    expandIconPosition: 'left',
+    expandIconPosition: 'start',
   }),
-  slots: ['expandIcon'],
-  // emits: ['change', 'update:activeKey'],
+  slots: Object as CustomSlotsType<{
+    default?: any;
+    expandIcon?: CollapsePanelProps;
+  }>,
   setup(props, { attrs, slots, emit }) {
     const stateActiveKey = ref<Key[]>(
       getActiveKeysArray(firstNotUndefined([props.activeKey, props.defaultActiveKey])),
@@ -55,13 +60,17 @@ export default defineComponent({
       },
       { deep: true },
     );
-    const { prefixCls, direction } = useConfigInject('collapse', props);
+    const { prefixCls, direction, rootPrefixCls } = useConfigInject('collapse', props);
+
+    // style
+    const [wrapSSR, hashId] = useStyle(prefixCls);
+
     const iconPosition = computed(() => {
       const { expandIconPosition } = props;
       if (expandIconPosition !== undefined) {
         return expandIconPosition;
       }
-      return direction.value === 'rtl' ? 'right' : 'left';
+      return direction.value === 'rtl' ? 'end' : 'start';
     });
 
     const renderExpandIcon = (panelProps: CollapsePanelProps) => {
@@ -73,7 +82,12 @@ export default defineComponent({
       );
 
       return (
-        <div>
+        <div
+          class={[`${prefixCls.value}-expand-icon`, hashId.value]}
+          onClick={() =>
+            ['header', 'icon'].includes(props.collapsible) && onClickItem(panelProps.panelKey)
+          }
+        >
           {isValidElement(Array.isArray(expandIcon) ? icon[0] : icon)
             ? cloneElement(
                 icon,
@@ -116,6 +130,7 @@ export default defineComponent({
       if (isEmptyElement(child)) return;
       const activeKey = stateActiveKey.value;
       const { accordion, destroyInactivePanel, collapsible, openAnimation } = props;
+      const animation = openAnimation || collapseMotion(`${rootPrefixCls.value}-motion-collapse`);
 
       // If there is no key provide, use the panel order as default key
       const key = String(child.key ?? index);
@@ -146,7 +161,7 @@ export default defineComponent({
         isActive,
         prefixCls: prefixCls.value,
         destroyInactivePanel,
-        openAnimation,
+        openAnimation: animation,
         accordion,
         onItemClick: mergeCollapsible === 'disabled' ? null : onClickItem,
         expandIcon: renderExpandIcon,
@@ -162,15 +177,18 @@ export default defineComponent({
 
     return () => {
       const { accordion, bordered, ghost } = props;
-      const collapseClassName = classNames({
-        [prefixCls.value]: true,
-        [`${prefixCls.value}-borderless`]: !bordered,
-        [`${prefixCls.value}-icon-position-${iconPosition.value}`]: true,
-        [`${prefixCls.value}-rtl`]: direction.value === 'rtl',
-        [`${prefixCls.value}-ghost`]: !!ghost,
-        [attrs.class as string]: !!attrs.class,
-      });
-      return (
+      const collapseClassName = classNames(
+        prefixCls.value,
+        {
+          [`${prefixCls.value}-borderless`]: !bordered,
+          [`${prefixCls.value}-icon-position-${iconPosition.value}`]: true,
+          [`${prefixCls.value}-rtl`]: direction.value === 'rtl',
+          [`${prefixCls.value}-ghost`]: !!ghost,
+          [attrs.class as string]: !!attrs.class,
+        },
+        hashId.value,
+      );
+      return wrapSSR(
         <div
           class={collapseClassName}
           {...getDataAndAriaProps(attrs)}
@@ -178,7 +196,7 @@ export default defineComponent({
           role={accordion ? 'tablist' : null}
         >
           {getItems()}
-        </div>
+        </div>,
       );
     };
   },

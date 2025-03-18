@@ -1,18 +1,27 @@
 import { computed, ref, watch, defineComponent, provide } from 'vue';
 import Checkbox from './Checkbox';
 import { useInjectFormItemContext } from '../form/FormItemContext';
-import useConfigInject from '../_util/hooks/useConfigInject';
+import useConfigInject from '../config-provider/hooks/useConfigInject';
 import type { CheckboxOptionType } from './interface';
 import { CheckboxGroupContextKey, checkboxGroupProps } from './interface';
+
+// CSSINJS
+import useStyle from './style';
 
 export default defineComponent({
   compatConfig: { MODE: 3 },
   name: 'ACheckboxGroup',
+  inheritAttrs: false,
   props: checkboxGroupProps(),
   // emits: ['change', 'update:value'],
-  setup(props, { slots, emit, expose }) {
+  setup(props, { slots, attrs, emit, expose }) {
     const formItemContext = useInjectFormItemContext();
     const { prefixCls, direction } = useConfigInject('checkbox', props);
+    const groupPrefixCls = computed(() => `${prefixCls.value}-group`);
+
+    // style
+    const [wrapSSR, hashId] = useStyle(groupPrefixCls);
+
     const mergedValue = ref((props.value === undefined ? props.defaultValue : props.value) || []);
     watch(
       () => props.value,
@@ -32,7 +41,7 @@ export default defineComponent({
       });
     });
     const triggerUpdate = ref(Symbol());
-    const registeredValuesMap = ref<Map<Symbol, string>>(new Map());
+    const registeredValuesMap = ref(new Map<Symbol, string>());
     const cancelValue = (id: Symbol) => {
       registeredValuesMap.value.delete(id);
       triggerUpdate.value = Symbol();
@@ -87,7 +96,6 @@ export default defineComponent({
     return () => {
       const { id = formItemContext.id.value } = props;
       let children = null;
-      const groupPrefixCls = `${prefixCls.value}-group`;
       if (options.value && options.value.length > 0) {
         children = options.value.map(option => (
           <Checkbox
@@ -98,19 +106,25 @@ export default defineComponent({
             value={option.value}
             checked={mergedValue.value.indexOf(option.value) !== -1}
             onChange={option.onChange}
-            class={`${groupPrefixCls}-item`}
+            class={`${groupPrefixCls.value}-item`}
           >
-            {option.label === undefined ? slots.label?.(option) : option.label}
+            {slots.label !== undefined ? slots.label?.(option) : option.label}
           </Checkbox>
         ));
       }
-      return (
+      return wrapSSR(
         <div
-          class={[groupPrefixCls, { [`${groupPrefixCls}-rtl`]: direction.value === 'rtl' }]}
+          {...attrs}
+          class={[
+            groupPrefixCls.value,
+            { [`${groupPrefixCls.value}-rtl`]: direction.value === 'rtl' },
+            attrs.class,
+            hashId.value,
+          ]}
           id={id}
         >
           {children || slots.default?.()}
-        </div>
+        </div>,
       );
     };
   },

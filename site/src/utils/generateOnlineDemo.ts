@@ -32,20 +32,22 @@ components: {
 });
 </script>`;
 
-const mainJs = `import { createApp } from "vue";
-import App from "./App.vue";
+const mainJs = `import { createApp } from 'vue';
 import Antd from 'ant-design-vue';
-import 'ant-design-vue/dist/antd.css';
+import App from './App';
+import 'ant-design-vue/dist/reset.css';
 
-const app = createApp(App).use(Antd);
-app.mount("#app");
+const app = createApp(App);
+
+app.use(Antd).mount('#app');
 `;
 
 function getDeps(code: string) {
+  const deps = Object.assign({}, packageInfo.dependencies, packageInfo.devDependencies);
   return (code.match(/from '([^']+)';\n/g) || [])
     .map(v => v.slice(6, v.length - 3))
     .reduce((prevV, dep) => {
-      prevV[dep] = 'latest';
+      prevV[dep] = deps[dep] || 'latest';
       return prevV;
     }, {});
 }
@@ -59,19 +61,23 @@ export function getCodeSandboxParams(code: string, meta: Meta): string {
   return getParameters({
     files: {
       'package.json': {
-        content: JSON.stringify({
-          title: meta.title,
-          dependencies: {
-            ...getDeps(code),
-            vue: 'next',
-            'ant-design-vue': packageInfo.version,
+        content: JSON.stringify(
+          {
+            title: meta.title,
+            dependencies: {
+              ...getDeps(code),
+              vue: packageInfo.peerDependencies.vue,
+              'ant-design-vue': packageInfo.version,
+            },
+            devDependencies: {
+              '@vue/cli-plugin-babel': '~4.5.0',
+              typescript: '^4.0.5',
+            },
+            browserslist: ['> 0.2%', 'not dead'],
           },
-          devDependencies: {
-            '@vue/cli-plugin-babel': '~4.5.0',
-            typescript: '^4.0.5',
-          },
-          browserslist: ['> 0.2%', 'not dead'],
-        }),
+          undefined,
+          2,
+        ),
         isBinary: false,
       },
       'index.html': {

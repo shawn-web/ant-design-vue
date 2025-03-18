@@ -1,10 +1,11 @@
 import type { CSSProperties, PropType } from 'vue';
-import { computed, defineComponent, ref, watch } from 'vue';
+import { Fragment, computed, defineComponent, ref, watch } from 'vue';
 import PropTypes from '../_util/vue-types';
 import Trigger from '../vc-trigger';
 import placements from './placements';
 import { cloneElement } from '../_util/vnode';
 import classNames from '../_util/classNames';
+import { skipFlattenKey } from '../_util/props-util';
 
 export default defineComponent({
   compatConfig: { MODE: 3 },
@@ -33,7 +34,6 @@ export default defineComponent({
     mouseLeaveDelay: PropTypes.number.def(0.1),
   },
   emits: ['visibleChange', 'overlayClick'],
-  slots: ['overlay'],
   setup(props, { slots, emit, expose }) {
     const triggerVisible = ref(!!props.visible);
     watch(
@@ -54,7 +54,6 @@ export default defineComponent({
       if (props.visible === undefined) {
         triggerVisible.value = false;
       }
-
       emit('overlayClick', e);
     };
 
@@ -70,13 +69,12 @@ export default defineComponent({
       const extraOverlayProps = {
         prefixCls: `${props.prefixCls}-menu`,
         onClick,
-        getPopupContainer: () => triggerRef.value.getPopupDomNode(),
       };
       return (
-        <>
+        <Fragment key={skipFlattenKey}>
           {props.arrow && <div class={`${props.prefixCls}-arrow`} />}
           {cloneElement(overlayElement, extraOverlayProps, false)}
-        </>
+        </Fragment>
       );
     };
 

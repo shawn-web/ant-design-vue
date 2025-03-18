@@ -1,5 +1,4 @@
 import useMergedState from '../_util/hooks/useMergedState';
-import padStart from 'lodash-es/padStart';
 import { PickerPanel } from '../vc-picker';
 import type { Locale } from '../vc-picker/interface';
 import type { GenerateConfig } from '../vc-picker/generate';
@@ -11,11 +10,14 @@ import type {
 import { useLocaleReceiver } from '../locale-provider/LocaleReceiver';
 import enUS from './locale/en_US';
 import CalendarHeader from './Header';
-import type { VueNode } from '../_util/type';
-import type { App } from 'vue';
+import type { CustomSlotsType, VueNode } from '../_util/type';
+import type { App, PropType } from 'vue';
 import { computed, defineComponent, toRef } from 'vue';
-import useConfigInject from '../_util/hooks/useConfigInject';
+import useConfigInject from '../config-provider/hooks/useConfigInject';
 import classNames from '../_util/classNames';
+
+// CSSINJS
+import useStyle from './style';
 
 type InjectDefaultProps<Props> = Omit<
   Props,
@@ -24,6 +26,10 @@ type InjectDefaultProps<Props> = Omit<
   locale?: typeof enUS;
   size?: 'large' | 'default' | 'small';
 };
+
+export interface SelectInfo {
+  source: 'year' | 'month' | 'date' | 'customize';
+}
 
 // Picker Props
 export type PickerPanelBaseProps<DateType> = InjectDefaultProps<RCPickerPanelBaseProps<DateType>>;
@@ -62,7 +68,7 @@ export interface CalendarProps<DateType> {
   onChange?: (date: DateType | string) => void;
   'onUpdate:value'?: (date: DateType | string) => void;
   onPanelChange?: (date: DateType | string, mode: CalendarMode) => void;
-  onSelect?: (date: DateType | string) => void;
+  onSelect?: (date: DateType, selectInfo: SelectInfo) => void;
   valueFormat?: string;
 }
 
@@ -89,34 +95,58 @@ function generateCalendar<
   const Calendar = defineComponent<Props>({
     name: 'ACalendar',
     inheritAttrs: false,
-    props: [
-      'prefixCls',
-      'locale',
-      'validRange',
-      'disabledDate',
-      'dateFullCellRender',
-      'dateCellRender',
-      'monthFullCellRender',
-      'monthCellRender',
-      'headerRender',
-      'value',
-      'defaultValue',
-      'mode',
-      'fullscreen',
-      'onChange',
-      'onPanelChange',
-      'onSelect',
-      'valueFormat',
-    ] as any,
-    slots: [
-      'dateFullCellRender',
-      'dateCellRender',
-      'monthFullCellRender',
-      'monthCellRender',
-      'headerRender',
-    ],
-    setup(props, { emit, slots, attrs }) {
+    props: {
+      prefixCls: String,
+      locale: { type: Object as PropType<Props['locale']>, default: undefined as Props['locale'] },
+      validRange: { type: Array as PropType<DateType[]>, default: undefined },
+      disabledDate: { type: Function as PropType<Props['disabledDate']>, default: undefined },
+      dateFullCellRender: {
+        type: Function as PropType<Props['dateFullCellRender']>,
+        default: undefined,
+      },
+      dateCellRender: { type: Function as PropType<Props['dateCellRender']>, default: undefined },
+      monthFullCellRender: {
+        type: Function as PropType<Props['monthFullCellRender']>,
+        default: undefined,
+      },
+      monthCellRender: { type: Function as PropType<Props['monthCellRender']>, default: undefined },
+      headerRender: { type: Function as PropType<Props['headerRender']>, default: undefined },
+      value: {
+        type: [Object, String] as PropType<Props['value']>,
+        default: undefined as Props['value'],
+      },
+      defaultValue: {
+        type: [Object, String] as PropType<Props['defaultValue']>,
+        default: undefined as Props['defaultValue'],
+      },
+      mode: { type: String as PropType<Props['mode']>, default: undefined },
+      fullscreen: { type: Boolean as PropType<Props['fullscreen']>, default: undefined },
+      onChange: { type: Function as PropType<Props['onChange']>, default: undefined },
+      'onUpdate:value': { type: Function as PropType<Props['onUpdate:value']>, default: undefined },
+      onPanelChange: { type: Function as PropType<Props['onPanelChange']>, default: undefined },
+      onSelect: { type: Function as PropType<Props['onSelect']>, default: undefined },
+      valueFormat: { type: String, default: undefined },
+    } as any,
+    slots: Object as CustomSlotsType<{
+      dateFullCellRender?: { current: DateType };
+      dateCellRender?: { current: DateType };
+      monthFullCellRender?: { current: DateType };
+      monthCellRender?: { current: DateType };
+      headerRender?: {
+        value: DateType;
+        type: CalendarMode;
+        onChange: (date: DateType) => void;
+        onTypeChange: (type: CalendarMode) => void;
+      };
+      default: any;
+    }>,
+    setup(p, { emit, slots, attrs }) {
+      const props = p as unknown as Props;
       const { prefixCls, direction } = useConfigInject('picker', props);
+
+      // style
+      const [wrapSSR, hashId] = useStyle(prefixCls);
+
       const calendarPrefixCls = computed(() => `${prefixCls.value}-calendar`);
       const maybeToString = (date: DateType) => {
         return props.valueFormat ? generateConfig.toString(date, props.valueFormat) : date;
@@ -191,9 +221,9 @@ function generateCalendar<
         triggerPanelChange(mergedValue.value, newMode);
       };
 
-      const onInternalSelect = (date: DateType) => {
+      const onInternalSelect = (date: DateType, source: SelectInfo['source']) => {
         triggerChange(date);
-        emit('select', maybeToString(date));
+        emit('select', maybeToString(date), { source });
       };
       // ====================== Locale ======================
       const defaultLocale = computed(() => {
@@ -238,7 +268,7 @@ function generateCalendar<
               )}
             >
               <div class={`${calendarPrefixCls.value}-date-value`}>
-                {padStart(String(generateConfig.getDate(date)), 2, '0')}
+                {String(generateConfig.getDate(date)).padStart(2, '0')}
               </div>
               <div class={`${calendarPrefixCls.value}-date-content`}>
                 {dateCellRender && dateCellRender({ current: date })}
@@ -273,7 +303,7 @@ function generateCalendar<
             </div>
           );
         };
-        return (
+        return wrapSSR(
           <div
             {...attrs}
             class={classNames(
@@ -284,13 +314,16 @@ function generateCalendar<
                 [`${calendarPrefixCls.value}-rtl`]: direction.value === 'rtl',
               },
               attrs.class,
+              hashId.value,
             )}
           >
             {headerRender ? (
               headerRender({
                 value: mergedValue.value,
                 type: mergedMode.value,
-                onChange: onInternalSelect,
+                onChange: nextDate => {
+                  onInternalSelect(nextDate, 'customize');
+                },
                 onTypeChange: triggerModeChange,
               })
             ) : (
@@ -313,13 +346,15 @@ function generateCalendar<
               generateConfig={generateConfig}
               dateRender={dateRender}
               monthCellRender={obj => monthRender(obj, mergedLocale.value.lang)}
-              onSelect={onInternalSelect}
+              onSelect={nextDate => {
+                onInternalSelect(nextDate, panelMode.value);
+              }}
               mode={panelMode.value}
               picker={panelMode.value}
               disabledDate={mergedDisabledDate.value}
               hideHeader
             />
-          </div>
+          </div>,
         );
       };
     },

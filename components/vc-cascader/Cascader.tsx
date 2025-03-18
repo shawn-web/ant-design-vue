@@ -5,6 +5,7 @@ import type { DisplayValueType, Placement } from '../vc-select/BaseSelect';
 import { baseSelectPropsWithoutPrivate } from '../vc-select/BaseSelect';
 import omit from '../_util/omit';
 import type { Key, VueNode } from '../_util/type';
+import { objectType } from '../_util/type';
 import PropTypes from '../_util/vue-types';
 import { initDefaultProps } from '../_util/props-util';
 import useId from '../vc-select/hooks/useId';
@@ -68,7 +69,7 @@ function baseCascaderProps<OptionType extends BaseOptionType = DefaultOptionType
     // MISC
     id: String,
     prefixCls: String,
-    fieldNames: Object as PropType<FieldNames>,
+    fieldNames: objectType<FieldNames>(),
     children: Array as PropType<VueNode[]>,
 
     // Value
@@ -101,8 +102,6 @@ function baseCascaderProps<OptionType extends BaseOptionType = DefaultOptionType
     /** @deprecated Use `open` instead */
     popupVisible: { type: Boolean, default: undefined },
 
-    /** @deprecated Use `dropdownClassName` instead */
-    popupClassName: String,
     dropdownClassName: String,
     dropdownMenuColumnStyle: {
       type: Object as PropType<CSSProperties>,
@@ -422,11 +421,6 @@ export default defineComponent({
           '`popupVisible` is deprecated. Please use `open` instead.',
         );
         devWarning(
-          props.popupClassName === undefined,
-          'Cascader',
-          '`popupClassName` is deprecated. Please use `dropdownClassName` instead.',
-        );
-        devWarning(
           props.popupPlacement === undefined,
           'Cascader',
           '`popupPlacement` is deprecated. Please use `placement` instead.',
@@ -440,8 +434,6 @@ export default defineComponent({
     }
 
     const mergedOpen = computed(() => (props.open !== undefined ? props.open : props.popupVisible));
-
-    const mergedDropdownClassName = computed(() => props.dropdownClassName || props.popupClassName);
 
     const mergedDropdownStyle = computed(() => props.dropdownStyle || props.popupStyle || {});
 
@@ -461,6 +453,7 @@ export default defineComponent({
       loadingIcon,
       dropdownMenuColumnStyle,
       customSlots,
+      dropdownClassName,
     } = toRefs(props);
     useProvideCascader({
       options: mergedOptions,
@@ -524,7 +517,6 @@ export default defineComponent({
         'popupVisible',
         'open',
 
-        'popupClassName',
         'dropdownClassName',
         'dropdownMenuColumnStyle',
 
@@ -580,7 +572,7 @@ export default defineComponent({
           emptyOptions={emptyOptions}
           // Open
           open={mergedOpen.value}
-          dropdownClassName={mergedDropdownClassName.value}
+          dropdownClassName={dropdownClassName.value}
           placement={mergedPlacement.value}
           onDropdownVisibleChange={onInternalDropdownVisibleChange}
           // Children

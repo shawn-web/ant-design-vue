@@ -12,9 +12,8 @@ export type TooltipContentProps = Partial<ExtractPropTypes<typeof tooltipContent
 
 export default defineComponent({
   compatConfig: { MODE: 3 },
-  name: 'Content',
+  name: 'TooltipContent',
   props: tooltipContentProps,
-  slots: ['overlay'],
   setup(props: TooltipContentProps, { slots }) {
     return () => (
       <div

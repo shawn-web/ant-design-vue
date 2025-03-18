@@ -27,7 +27,12 @@
         <a-popover placement="right">
           <a>{{ isZhCN ? '微信' : 'WeChat' }}</a>
           <template #content>
-            <img width="160" height="160" alt="wechat" src="https://qn.antdv.com/wechat.jpeg" />
+            <img
+              width="160"
+              height="160"
+              alt="wechat"
+              src="https://aliyuncdn.antdv.com/wechat.jpeg"
+            />
           </template>
         </a-popover>
       </a-menu-item>
@@ -35,7 +40,10 @@
         <a>QQ 1群(217490093) 已满</a>
       </a-menu-item>
       <a-menu-item key="qq2">
-        <a>QQ 2群(809774695)</a>
+        <a>QQ 2群(809774695) 已满</a>
+      </a-menu-item>
+      <a-menu-item key="qq3">
+        <a>QQ 3群(927828249)</a>
       </a-menu-item>
     </a-menu-item-group>
   </a-menu>

@@ -4,7 +4,8 @@ subtitle: 排版
 type: 通用
 title: Typography
 cols: 1
-cover: https://gw.alipayobjects.com/zos/alicdn/GOM1KQ24O/Typography.svg
+cover: https://mdn.alipayobjects.com/huamei_7uahnr/afts/img/A*MLt3R6m9huoAAAAAAAAAAAAADrJ8AQ/original
+coverDark: https://mdn.alipayobjects.com/huamei_7uahnr/afts/img/A*LT2jR41Uj2EAAAAAAAAAAAAADrJ8AQ/original
 ---
 
 文本的基本格式。
@@ -82,7 +83,7 @@ cover: https://gw.alipayobjects.com/zos/alicdn/GOM1KQ24O/Typography.svg
 ```json
   {
     text: string,
-    onCopy: function,
+    onCopy: function(event),
     tooltip: false,
   }
 ```
@@ -115,7 +116,7 @@ cover: https://gw.alipayobjects.com/zos/alicdn/GOM1KQ24O/Typography.svg
 | editing | 控制是否是编辑中状态 | boolean | false |  |
 | maxlength | 编辑中文本域最大长度 | number | - |  |
 | tooltip | 是否展示提示文本 | boolean | true |  |
-| triggerType | Edit mode trigger - icon, text or both (not specifying icon as trigger hides it) | Array&lt;`icon`\|`text`> | \[`icon`] |  |
+| triggerType | 编辑模式触发器类型，图标、文本或者两者都设置（不设置图标作为触发器时它会隐藏） | Array&lt;`icon`\|`text`> | \[`icon`] |  |
 | onCancel | 按 ESC 退出编辑状态时触发 | function | - |  |
 | onChange | 文本域编辑时触发 | function(event) | - |  |
 | onEnd | 按 ENTER 结束编辑状态时触发 | function | - |  |

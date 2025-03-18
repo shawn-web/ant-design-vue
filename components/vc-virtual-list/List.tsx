@@ -4,7 +4,6 @@ import {
   toRaw,
   onMounted,
   onUpdated,
-  ref,
   defineComponent,
   watchEffect,
   computed,
@@ -140,9 +139,9 @@ const List = defineComponent({
       },
       { immediate: true },
     );
-    const componentRef = ref<HTMLDivElement>();
-    const fillerInnerRef = ref<HTMLDivElement>();
-    const scrollBarRef = ref<any>(); // Hack on scrollbar to enable flash call
+    const componentRef = shallowRef<HTMLDivElement>();
+    const fillerInnerRef = shallowRef<HTMLDivElement>();
+    const scrollBarRef = shallowRef<any>(); // Hack on scrollbar to enable flash call
     // =============================== Item Key ===============================
     const getKey = (item: Record<string, any>) => {
       return itemKey.value(item);
@@ -189,7 +188,7 @@ const List = defineComponent({
       offset: undefined,
     });
 
-    const offsetHeight = ref(0);
+    const offsetHeight = shallowRef(0);
     onMounted(() => {
       nextTick(() => {
         offsetHeight.value = fillerInnerRef.value?.offsetHeight || 0;
@@ -226,8 +225,13 @@ const List = defineComponent({
             offset: undefined,
           });
         }
+        if (componentRef.value) {
+          state.scrollTop = componentRef.value.scrollTop;
+        }
       },
-      { immediate: true },
+      {
+        immediate: true,
+      },
     );
     watch(
       [
@@ -277,11 +281,11 @@ const List = defineComponent({
           itemTop = currentItemBottom;
         }
 
-        // Fallback to normal if not match. This code should never reach
-        /* istanbul ignore next */
+        // When scrollTop at the end but data cut to small count will reach this
         if (startIndex === undefined) {
           startIndex = 0;
           startOffset = 0;
+          endIndex = Math.ceil(height / itemHeight);
         }
         if (endIndex === undefined) {
           endIndex = dataLen - 1;
@@ -325,7 +329,7 @@ const List = defineComponent({
     // When data size reduce. It may trigger native scroll event back to fit scroll position
     function onFallbackScroll(e: UIEvent) {
       const { scrollTop: newScrollTop } = e.currentTarget as Element;
-      if (Math.abs(newScrollTop - state.scrollTop) >= 1) {
+      if (newScrollTop !== state.scrollTop) {
         syncScrollTop(newScrollTop);
       }
 
@@ -438,7 +442,9 @@ const List = defineComponent({
       },
       { flush: 'post' },
     );
-
+    const delayHideScrollBar = () => {
+      scrollBarRef.value?.delayHidden();
+    };
     return {
       state,
       mergedData,
@@ -453,8 +459,10 @@ const List = defineComponent({
       sharedConfig,
       scrollBarRef,
       fillerInnerRef,
+      delayHideScrollBar,
     };
   },
+
   render() {
     const {
       prefixCls = 'rc-virtual-list',
@@ -484,6 +492,7 @@ const List = defineComponent({
       sharedConfig,
       setInstance,
       mergedData,
+      delayHideScrollBar,
     } = this;
     return (
       <div
@@ -499,6 +508,7 @@ const List = defineComponent({
           style={componentStyle}
           ref="componentRef"
           onScroll={onFallbackScroll}
+          onMouseenter={delayHideScrollBar}
         >
           <Filler
             prefixCls={prefixCls}

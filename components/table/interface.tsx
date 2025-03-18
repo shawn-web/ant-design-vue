@@ -13,7 +13,7 @@ import type { Breakpoint } from '../_util/responsiveObserve';
 import type { INTERNAL_SELECTION_ITEM } from './hooks/useSelection';
 import type { VueNode } from '../_util/type';
 import { tuple } from '../_util/type';
-import type { CSSProperties } from 'vue';
+import type { CSSProperties, VNodeArrayChildren } from 'vue';
 // import { TableAction } from './Table';
 
 export type { GetRowKey, ExpandableConfig };
@@ -49,7 +49,7 @@ export interface TableLocale {
 export type SortOrder = 'descend' | 'ascend' | null;
 
 const TableActions = tuple('paginate', 'sort', 'filter');
-export type TableAction = typeof TableActions[number];
+export type TableAction = (typeof TableActions)[number];
 
 export type CompareFn<T> = (a: T, b: T, sortOrder?: SortOrder) => number;
 
@@ -58,7 +58,6 @@ export interface ColumnFilterItem {
   value: string | number | boolean;
   children?: ColumnFilterItem[];
 }
-
 export interface ColumnTitleProps<RecordType> {
   /** @deprecated Please use `sorterColumns` instead. */
   sortOrder?: SortOrder;
@@ -66,16 +65,25 @@ export interface ColumnTitleProps<RecordType> {
   sortColumn?: ColumnType<RecordType>;
   sortColumns?: { column: ColumnType<RecordType>; order: SortOrder }[];
 
-  filters?: Record<string, string[]>;
+  filters?: Record<string, FilterValue>;
 }
 
-export type ColumnTitle<RecordType> = VueNode | ((props: ColumnTitleProps<RecordType>) => VueNode);
+type ColumnTitleNode = VueNode | VNodeArrayChildren;
+export type ColumnTitle<RecordType> =
+  | ColumnTitleNode
+  | ((props: ColumnTitleProps<RecordType>) => ColumnTitleNode);
 
 export type FilterValue = (Key | boolean)[];
 export type FilterKey = Key[] | null;
-export type FilterSearchType = boolean | ((input: string, record: {}) => boolean);
+export type FilterSearchType<RecordType = Record<string, any>> =
+  | boolean
+  | ((input: string, record: RecordType) => boolean);
 export interface FilterConfirmProps {
   closeDropdown: boolean;
+}
+export interface FilterResetProps {
+  confirm?: boolean;
+  closeDropdown?: boolean;
 }
 
 export interface FilterDropdownProps<RecordType> {
@@ -83,13 +91,16 @@ export interface FilterDropdownProps<RecordType> {
   setSelectedKeys: (selectedKeys: Key[]) => void;
   selectedKeys: Key[];
   confirm: (param?: FilterConfirmProps) => void;
-  clearFilters?: () => void;
+  clearFilters?: (param?: FilterResetProps) => void;
   filters?: ColumnFilterItem[];
+  /** Only close filterDropdown */
+  close: () => void;
   visible: boolean;
   column: ColumnType<RecordType>;
 }
 
-export interface ColumnType<RecordType = DefaultRecordType> extends RcColumnType<RecordType> {
+export interface ColumnType<RecordType = DefaultRecordType>
+  extends Omit<RcColumnType<RecordType>, 'title'> {
   title?: ColumnTitle<RecordType>;
   // Sorter
   sorter?:
@@ -114,13 +125,19 @@ export interface ColumnType<RecordType = DefaultRecordType> extends RcColumnType
   defaultFilteredValue?: FilterValue | null;
   filterIcon?: VueNode | ((opt: { filtered: boolean; column: ColumnType }) => VueNode);
   filterMode?: 'menu' | 'tree';
-  filterSearch?: boolean;
+  filterSearch?: FilterSearchType<ColumnFilterItem>;
   onFilter?: (value: string | number | boolean, record: RecordType) => boolean;
-  filterDropdownVisible?: boolean;
-  onFilterDropdownVisibleChange?: (visible: boolean) => void;
-
+  filterDropdownOpen?: boolean;
+  onFilterDropdownOpenChange?: (visible: boolean) => void;
+  filterResetToDefaultFilteredValue?: boolean;
   // Responsive
   responsive?: Breakpoint[];
+
+  // Deprecated
+  /** @deprecated Please use `filterDropdownOpen` instead */
+  filterDropdownVisible?: boolean;
+  /** @deprecated Please use `onFilterDropdownOpenChange` instead */
+  onFilterDropdownVisibleChange?: (visible: boolean) => void;
 }
 
 export interface ColumnGroupType<RecordType> extends Omit<ColumnType<RecordType>, 'dataIndex'> {

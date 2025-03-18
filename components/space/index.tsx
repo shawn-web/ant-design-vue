@@ -1,12 +1,16 @@
-import type { PropType, ExtractPropTypes, CSSProperties } from 'vue';
-import { defineComponent, computed, ref, watch } from 'vue';
+import type { PropType, ExtractPropTypes, CSSProperties, Plugin, App } from 'vue';
+import { defineComponent, computed, ref, watch, Fragment } from 'vue';
 import PropTypes from '../_util/vue-types';
 import { filterEmpty } from '../_util/props-util';
 import type { SizeType } from '../config-provider';
-import { tuple, withInstall } from '../_util/type';
-import useConfigInject from '../_util/hooks/useConfigInject';
+import type { CustomSlotsType } from '../_util/type';
+import { booleanType, tuple } from '../_util/type';
+import useConfigInject from '../config-provider/hooks/useConfigInject';
 import useFlexGapSupport from '../_util/hooks/useFlexGapSupport';
 import classNames from '../_util/classNames';
+import Compact from './Compact';
+
+import useStyle from './style';
 
 export type SpaceSize = SizeType | number;
 const spaceSize = {
@@ -21,7 +25,7 @@ export const spaceProps = () => ({
   },
   direction: PropTypes.oneOf(tuple('horizontal', 'vertical')).def('horizontal'),
   align: PropTypes.oneOf(tuple('start', 'end', 'center', 'baseline')),
-  wrap: { type: Boolean, default: undefined },
+  wrap: booleanType(),
 });
 
 export type SpaceProps = Partial<ExtractPropTypes<ReturnType<typeof spaceProps>>>;
@@ -33,12 +37,17 @@ function getNumberSize(size: SpaceSize) {
 const Space = defineComponent({
   compatConfig: { MODE: 3 },
   name: 'ASpace',
+  inheritAttrs: false,
   props: spaceProps(),
-  slots: ['split'],
-  setup(props, { slots }) {
+  slots: Object as CustomSlotsType<{
+    split?: any;
+    default?: any;
+  }>,
+  setup(props, { slots, attrs }) {
     const { prefixCls, space, direction: directionConfig } = useConfigInject('space', props);
+    const [wrapSSR, hashId] = useStyle(prefixCls);
     const supportFlexGap = useFlexGapSupport();
-    const size = computed(() => props.size ?? space.value?.size ?? 'small');
+    const size = computed(() => props.size ?? space?.value?.size ?? 'small');
     const horizontalSize = ref<number>();
     const verticalSize = ref<number>();
     watch(
@@ -58,7 +67,7 @@ const Space = defineComponent({
       props.align === undefined && props.direction === 'horizontal' ? 'center' : props.align,
     );
     const cn = computed(() => {
-      return classNames(prefixCls.value, `${prefixCls.value}-${props.direction}`, {
+      return classNames(prefixCls.value, hashId.value, `${prefixCls.value}-${props.direction}`, {
         [`${prefixCls.value}-rtl`]: directionConfig.value === 'rtl',
         [`${prefixCls.value}-align-${mergedAlign.value}`]: mergedAlign.value,
       });
@@ -80,8 +89,8 @@ const Space = defineComponent({
     });
     return () => {
       const { wrap, direction = 'horizontal' } = props;
-
-      const items = filterEmpty(slots.default?.());
+      const children = slots.default?.();
+      const items = filterEmpty(children);
       const len = items.length;
 
       if (len === 0) {
@@ -92,8 +101,16 @@ const Space = defineComponent({
       const horizontalSizeVal = horizontalSize.value;
       const latestIndex = len - 1;
       return (
-        <div class={cn.value} style={style.value}>
+        <div
+          {...attrs}
+          class={[cn.value, attrs.class]}
+          style={[style.value, attrs.style as CSSProperties]}
+        >
           {items.map((child, index) => {
+            let originIndex = children.indexOf(child);
+            if (originIndex === -1) {
+              originIndex = `$$space-${index}`;
+            }
             let itemStyle: CSSProperties = {};
             if (!supportFlexGap.value) {
               if (direction === 'vertical') {
@@ -110,8 +127,8 @@ const Space = defineComponent({
               }
             }
 
-            return (
-              <>
+            return wrapSSR(
+              <Fragment key={originIndex}>
                 <div class={itemClassName} style={itemStyle}>
                   {child}
                 </div>
@@ -120,7 +137,7 @@ const Space = defineComponent({
                     {split}
                   </span>
                 )}
-              </>
+              </Fragment>,
             );
           })}
         </div>
@@ -129,4 +146,17 @@ const Space = defineComponent({
   },
 });
 
-export default withInstall(Space);
+Space.Compact = Compact;
+
+Space.install = function (app: App) {
+  app.component(Space.name, Space);
+  app.component(Compact.name, Compact);
+  return app;
+};
+
+export { Compact };
+
+export default Space as typeof Space &
+  Plugin & {
+    readonly Compact: typeof Compact;
+  };

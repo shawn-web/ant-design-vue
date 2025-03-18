@@ -9,7 +9,7 @@ import {
   onMounted,
   onUpdated,
   reactive,
-  ref,
+  shallowRef,
 } from 'vue';
 import { treeNodeProps } from './props';
 import classNames from '../_util/classNames';
@@ -25,11 +25,10 @@ const defaultTitle = '---';
 
 export default defineComponent({
   compatConfig: { MODE: 3 },
-  name: 'TreeNode',
+  name: 'ATreeNode',
   inheritAttrs: false,
   props: treeNodeProps,
   isTreeNode: 1,
-  slots: ['title', 'icon', 'switcherIcon'],
   setup(props, { attrs, slots, expose }) {
     warning(
       !('slots' in props.data),
@@ -38,7 +37,7 @@ export default defineComponent({
       )}instead`,
     );
 
-    const dragNodeHighlight = ref(false);
+    const dragNodeHighlight = shallowRef(false);
     const context = useInjectTreeContext();
     const {
       expandedKeysSet,
@@ -74,7 +73,7 @@ export default defineComponent({
     const dragOverGapBottom = eagerComputed(() => mergedTreeNodeProps.value.dragOverGapBottom);
     const pos = eagerComputed(() => mergedTreeNodeProps.value.pos);
 
-    const selectHandle = ref();
+    const selectHandle = shallowRef();
 
     const hasChildren = computed(() => {
       const { eventKey } = props;
@@ -293,7 +292,7 @@ export default defineComponent({
     // ==================== Render: Drag Handler ====================
     const renderDragHandler = () => {
       const { draggable, prefixCls } = context.value;
-      return draggable?.icon ? (
+      return draggable && draggable?.icon ? (
         <span class={`${prefixCls}-draggable-icon`}>{draggable.icon}</span>
       ) : null;
     };

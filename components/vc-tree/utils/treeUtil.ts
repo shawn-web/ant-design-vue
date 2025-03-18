@@ -11,9 +11,9 @@ import type {
 } from '../interface';
 import { getPosition, isTreeNode } from '../util';
 import { warning } from '../../vc-util/warning';
-import { camelize } from 'vue';
+
 import type { TreeNodeProps } from '../props';
-import { filterEmpty } from '../../_util/props-util';
+import { camelize, filterEmpty } from '../../_util/props-util';
 import omit from '../../_util/omit';
 import type { VueNode } from '../../_util/type';
 
@@ -40,7 +40,7 @@ export function fillFieldNames(fieldNames?: FieldNames): Required<FieldNames> {
  * Warning if TreeNode do not provides key
  */
 export function warningWithoutKey(treeData: DataNode[], fieldNames: FieldNames) {
-  const keys: Map<string, boolean> = new Map();
+  const keys = new Map<string, boolean>();
 
   function dig(list: DataNode[], path = '') {
     (list || []).forEach(treeNode => {
